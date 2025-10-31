@@ -1,0 +1,49 @@
+/* styles.css - SaaS-level modern UI */
+body {
+  font-family: 'Inter', sans-serif;
+}
+
+.font-poppins {
+  font-family: 'Poppins', sans-serif;
+}
+
+/* Glassmorphism / Neumorphic cards */
+.card-glass {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s;
+}
+.card-glass:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+}
+
+/* Inputs */
+.input-glass {
+  width: 100%;
+  padding: 0.5rem;
+  margin-bottom: 0.5rem;
+  border-radius: 0.5rem;
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(5px);
+  color: inherit;
+  transition: all 0.2s;
+}
+.input-glass:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.6);
+}
+
+/* Buttons */
+button {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+button:hover {
+  transform: translateY(-1px);
+}
