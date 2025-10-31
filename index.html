@@ -1,70 +1,56 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VibeInvoice SaaS</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Poppins:wght@600&display=swap" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.3.3/dist/tailwind.min.css" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
-<script defer src="app.js"></script>
-<script src="lib/html2canvas.min.js"></script>
-<script src="lib/jspdf.min.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InvoiceApp | SaaS-Level Invoice Generator</title>
+
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- Favicon (optional) -->
+  <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/4679/4679712.png" />
 </head>
-<body class="transition-colors duration-500 font-inter bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100">
-<div id="app" class="min-h-screen">
+<body class="bg-gradient-to-br from-indigo-50 via-white to-indigo-100 min-h-screen text-gray-800 flex flex-col">
+  <nav class="bg-white shadow-md p-4 flex justify-between items-center sticky top-0">
+    <h1 class="text-2xl font-bold text-indigo-600">InvoiceApp</h1>
+    <button id="themeToggle" class="px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Dark Mode</button>
+  </nav>
 
-  <!-- Top Navbar -->
-  <div class="flex justify-between items-center p-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg">
-    <h1 class="font-poppins text-2xl">VibeInvoice SaaS</h1>
-    <div class="flex gap-3 items-center">
-      <button id="themeToggle" class="px-3 py-2 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/40 transition">Toggle Theme</button>
-      <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-bold">JM</div>
-    </div>
-  </div>
+  <main class="flex-1 p-6 grid md:grid-cols-2 gap-6">
+    <!-- Left Column -->
+    <section class="card-glass">
+      <h2 class="text-lg font-semibold mb-4">Add Items</h2>
+      <div id="itemsContainer"></div>
+      <button id="addItemBtn" class="w-full mt-3 bg-indigo-500 text-white py-2 rounded-md hover:bg-indigo-600">+ Add Item</button>
 
-  <!-- Main Content -->
-  <div class="flex flex-col lg:flex-row gap-6 p-6">
-    <!-- Left Panel: Editor -->
-    <div class="flex-1 space-y-6">
-      <div class="card-glass">
-        <h2 class="text-2xl font-poppins font-semibold mb-4">Business Info</h2>
-        <input type="text" placeholder="Business Name" class="input-glass">
-        <input type="text" placeholder="Business Address" class="input-glass">
-      </div>
-
-      <div class="card-glass">
-        <h2 class="text-2xl font-poppins font-semibold mb-4">Customer Info</h2>
-        <input type="text" placeholder="Customer Name" class="input-glass">
-        <input type="date" class="input-glass">
-      </div>
-
-      <div class="card-glass">
-        <h2 class="text-2xl font-poppins font-semibold mb-4">Items / Services</h2>
-        <div id="itemsContainer"></div>
-        <button id="addItemBtn" class="mt-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg shadow-lg hover:scale-105 transition-transform">+ Add Item</button>
-      </div>
-
-      <div class="card-glass">
-        <h2 class="text-2xl font-poppins font-semibold mb-4">Summary</h2>
-        <div class="space-y-2">
+      <div class="mt-6">
+        <h3 class="font-semibold mb-2">Totals</h3>
+        <div class="space-y-1 text-sm">
           <div class="flex justify-between"><span>Subtotal:</span> <span id="subtotal">$0.00</span></div>
           <div class="flex justify-between"><span>Tax (8.5%):</span> <span id="tax">$0.00</span></div>
           <div class="flex justify-between"><span>Discount:</span> <span id="discount">$0.00</span></div>
-          <div class="flex justify-between font-bold text-lg"><span>Total:</span> <span id="total">$0.00</span></div>
+          <hr />
+          <div class="flex justify-between font-semibold text-indigo-600"><span>Total:</span> <span id="total">$0.00</span></div>
         </div>
-        <button id="exportPdfBtn" class="mt-4 px-4 py-2 bg-gradient-to-r from-indigo-600 to-pink-600 text-white rounded-lg shadow-lg hover:scale-105 transition-transform">Export PDF</button>
       </div>
-    </div>
+    </section>
 
-    <!-- Right Panel: Live Preview -->
-    <div class="flex-1 sticky top-6 h-[80vh] overflow-auto">
-      <div id="invoicePreview" class="card-glass h-full p-6">
-        <h2 class="text-2xl font-poppins font-semibold mb-4">Invoice Preview</h2>
-        <div id="previewContent" class="space-y-2"></div>
-      </div>
-    </div>
-  </div>
-</div>
+    <!-- Right Column -->
+    <section id="invoicePreview" class="card-glass">
+      <h2 class="text-lg font-semibold mb-4">Invoice Preview</h2>
+      <div id="previewContent" class="space-y-2 text-sm"></div>
+      <button id="exportPdfBtn" class="mt-6 w-full bg-green-500 text-white py-2 rounded-md hover:bg-green-600">Export as PDF</button>
+    </section>
+  </main>
+
+  <footer class="text-center text-sm text-gray-500 py-4">
+    © 2025 InvoiceApp. All rights reserved.
+  </footer>
+
+  <script src="lib/html2canvas.min.js"></script>
+  <script src="lib/jspdf.min.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
