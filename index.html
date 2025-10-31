@@ -5,52 +5,77 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>InvoiceApp | SaaS-Level Invoice Generator</title>
 
-  <!-- Tailwind CSS via CDN -->
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="styles.css" />
-
-  <!-- Favicon (optional) -->
   <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/4679/4679712.png" />
 </head>
-<body class="bg-gradient-to-br from-indigo-50 via-white to-indigo-100 min-h-screen text-gray-800 flex flex-col">
-  <nav class="bg-white shadow-md p-4 flex justify-between items-center sticky top-0">
+<body class="bg-gray-100 min-h-screen text-gray-800 flex flex-col transition-colors duration-300">
+
+  <!-- Navbar -->
+  <nav class="bg-white shadow-md p-4 flex justify-between items-center sticky top-0 z-50">
     <h1 class="text-2xl font-bold text-indigo-600">InvoiceApp</h1>
-    <button id="themeToggle" class="px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Dark Mode</button>
+    <div class="flex items-center gap-3">
+      <button id="themeToggle" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition">Dark Mode</button>
+      <a href="dashboard.html" class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition">View Dashboard</a>
+    </div>
   </nav>
 
+  <!-- Main content -->
   <main class="flex-1 p-6 grid md:grid-cols-2 gap-6">
-    <!-- Left Column -->
-    <section class="card-glass">
-      <h2 class="text-lg font-semibold mb-4">Add Items</h2>
-      <div id="itemsContainer"></div>
-      <button id="addItemBtn" class="w-full mt-3 bg-indigo-500 text-white py-2 rounded-md hover:bg-indigo-600">+ Add Item</button>
 
-      <div class="mt-6">
-        <h3 class="font-semibold mb-2">Totals</h3>
-        <div class="space-y-1 text-sm">
+    <!-- Left Column: Invoice Details + Items -->
+    <section class="bg-white rounded-lg shadow-lg p-6 flex flex-col">
+      <h2 class="text-xl font-semibold mb-4 text-gray-700">Invoice Details</h2>
+
+      <!-- Customer & Business -->
+      <div class="mb-4 flex flex-col gap-2">
+        <input type="text" id="customerName" placeholder="Customer Name" class="px-2 py-1 border rounded" />
+        <input type="text" id="businessType" placeholder="Business Type" class="px-2 py-1 border rounded" />
+      </div>
+
+      <h3 class="text-lg font-semibold mb-2 text-gray-700">Add Invoice Items</h3>
+      <div id="itemsContainer" class="space-y-2"></div>
+      <button id="addItemBtn" class="mt-4 w-full bg-indigo-500 text-white py-2 rounded-md hover:bg-indigo-600 transition">+ Add Item</button>
+
+      <!-- Totals Card -->
+      <div class="mt-6 bg-gray-50 p-4 rounded-lg shadow-inner">
+        <h3 class="font-semibold mb-2 text-gray-600">Invoice Summary</h3>
+        <div class="space-y-1 text-sm text-gray-700">
           <div class="flex justify-between"><span>Subtotal:</span> <span id="subtotal">$0.00</span></div>
           <div class="flex justify-between"><span>Tax (8.5%):</span> <span id="tax">$0.00</span></div>
           <div class="flex justify-between"><span>Discount:</span> <span id="discount">$0.00</span></div>
-          <hr />
+          <hr class="my-1"/>
           <div class="flex justify-between font-semibold text-indigo-600"><span>Total:</span> <span id="total">$0.00</span></div>
         </div>
       </div>
     </section>
 
-    <!-- Right Column -->
-    <section id="invoicePreview" class="card-glass">
-      <h2 class="text-lg font-semibold mb-4">Invoice Preview</h2>
-      <div id="previewContent" class="space-y-2 text-sm"></div>
-      <button id="exportPdfBtn" class="mt-6 w-full bg-green-500 text-white py-2 rounded-md hover:bg-green-600">Export as PDF</button>
+    <!-- Right Column: Invoice Preview -->
+    <section id="invoicePreview" class="bg-white rounded-lg shadow-lg p-6 flex flex-col">
+      <h2 class="text-xl font-semibold mb-4 text-gray-700">Invoice Preview</h2>
+      <div id="previewContent" class="flex-1 space-y-2 p-4 border border-gray-200 rounded-lg bg-gray-50 overflow-y-auto">
+        <p class="text-gray-400 italic">Your items and totals will appear here.</p>
+      </div>
+      
+      <div class="mt-4 flex gap-2">
+        <button id="saveInvoiceBtn" class="flex-1 bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600 transition">💾 Save Invoice</button>
+        <button id="exportPdfBtn" class="flex-1 bg-green-500 text-white py-2 rounded-md hover:bg-green-600 transition">📄 Export PDF</button>
+      </div>
     </section>
+
   </main>
 
   <footer class="text-center text-sm text-gray-500 py-4">
     © 2025 InvoiceApp. All rights reserved.
   </footer>
 
+  <!-- Libraries -->
   <script src="lib/html2canvas.min.js"></script>
   <script src="lib/jspdf.min.js"></script>
-  <script src="app.js"></script>
+
+  <!-- App Scripts -->
+  <script src="script.js"></script>
 </body>
 </html>
+

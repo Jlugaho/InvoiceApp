@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InvoiceApp Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/4679/4679712.png" />
+</head>
+<body class="bg-gray-100 min-h-screen flex">
+
+  <!-- Sidebar -->
+  <aside class="w-64 bg-indigo-700 text-white flex flex-col p-6">
+    <h1 class="text-2xl font-bold mb-8">InvoiceApp</h1>
+    <nav class="flex flex-col space-y-3">
+      <a href="index.html" class="hover:bg-indigo-600 px-3 py-2 rounded">➕ New Invoice</a>
+      <a href="#" class="bg-indigo-900 px-3 py-2 rounded font-semibold">📊 Dashboard</a>
+      <a href="#" class="hover:bg-indigo-600 px-3 py-2 rounded">⚙️ Settings</a>
+    </nav>
+  </aside>
+
+  <!-- Main content -->
+  <main class="flex-1 p-6">
+    <!-- Stats cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      <div class="bg-white rounded-lg p-6 shadow hover:shadow-lg transition">
+        <h2 class="text-sm font-medium text-gray-500">Total Invoices</h2>
+        <p id="totalInvoices" class="mt-2 text-2xl font-bold">0</p>
+      </div>
+      <div class="bg-white rounded-lg p-6 shadow hover:shadow-lg transition">
+        <h2 class="text-sm font-medium text-gray-500">Total Revenue</h2>
+        <p id="totalRevenue" class="mt-2 text-2xl font-bold">$0.00</p>
+      </div>
+      <div class="bg-white rounded-lg p-6 shadow hover:shadow-lg transition">
+        <h2 class="text-sm font-medium text-gray-500">Top Business Type</h2>
+        <p id="topBusinessType" class="mt-2 text-2xl font-bold">N/A</p>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="flex flex-col md:flex-row justify-between mb-4 gap-2">
+      <input id="searchBox" type="text" placeholder="🔍 Search by customer" 
+             class="w-full md:w-1/3 px-4 py-2 rounded shadow focus:outline-none focus:ring-2 focus:ring-indigo-400">
+      <select id="sortSelect" class="w-full md:w-1/4 px-4 py-2 rounded shadow focus:outline-none focus:ring-2 focus:ring-indigo-400">
+        <option value="">Sort by</option>
+        <option value="dateAsc">Date ↑</option>
+        <option value="dateDesc">Date ↓</option>
+        <option value="totalAsc">Total ↑</option>
+        <option value="totalDesc">Total ↓</option>
+      </select>
+    </div>
+
+    <!-- Invoice Table -->
+    <div class="bg-white rounded-lg shadow overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">#</th>
+            <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Customer</th>
+            <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Business Type</th>
+            <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Total ($)</th>
+            <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Date</th>
+            <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="invoiceTable" class="divide-y divide-gray-200 bg-white"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,93 +1,104 @@
-// app.js - SaaS-level frontend logic
-document.addEventListener('DOMContentLoaded', () => {
-  const themeToggle = document.getElementById('themeToggle');
-  const itemsContainer = document.getElementById('itemsContainer');
-  const previewContent = document.getElementById('previewContent');
-  const subtotalEl = document.getElementById('subtotal');
-  const taxEl = document.getElementById('tax');
-  const discountEl = document.getElementById('discount');
-  const totalEl = document.getElementById('total');
-  const addItemBtn = document.getElementById('addItemBtn');
-  const exportPdfBtn = document.getElementById('exportPdfBtn');
+document.addEventListener("DOMContentLoaded", () => {
+  const tableBody = document.getElementById("invoiceTable");
+  const totalInvoices = document.getElementById("totalInvoices");
+  const totalRevenue = document.getElementById("totalRevenue");
+  const topBusinessType = document.getElementById("topBusinessType");
+  const searchBox = document.getElementById("searchBox");
+  const sortSelect = document.getElementById("sortSelect");
 
-  let items = [];
+  let invoices = JSON.parse(localStorage.getItem("invoices")) || [];
 
-  // Theme toggle
-  themeToggle.addEventListener('click', () => {
-    document.body.classList.toggle('dark');
-  });
+  function renderStats(data = invoices) {
+    totalInvoices.textContent = data.length;
+    const revenue = data.reduce((sum, inv) => sum + parseFloat(inv.total), 0);
+    totalRevenue.textContent = `$${revenue.toFixed(2)}`;
 
-  // Add new item
-  function addItem(name = '', qty = 1, price = 0) {
-    const id = Date.now();
-    items.push({ id, name, qty, price });
-    renderItems();
-    renderPreview();
+    if (data.length > 0) {
+      const counts = data.reduce((acc, inv) => {
+        acc[inv.type] = (acc[inv.type] || 0) + 1;
+        return acc;
+      }, {});
+      const topType = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+      topBusinessType.textContent = topType.charAt(0).toUpperCase() + topType.slice(1);
+    } else {
+      topBusinessType.textContent = "N/A";
+    }
   }
 
-  // Remove item
-  function removeItem(id) {
-    items = items.filter(i => i.id !== id);
-    renderItems();
-    renderPreview();
-  }
-
-  // Render item input fields
-  function renderItems() {
-    itemsContainer.innerHTML = '';
-    items.forEach(i => {
-      const div = document.createElement('div');
-      div.className = 'flex gap-2 mb-2 items-center';
-      div.innerHTML = `
-        <input type='text' placeholder='Item Name' value='${i.name}' class='flex-1 p-2 rounded-md border'>
-        <input type='number' value='${i.qty}' class='w-16 p-2 rounded-md border'>
-        <input type='number' value='${i.price}' class='w-20 p-2 rounded-md border'>
-        <button class='px-2 py-1 bg-red-500 text-white rounded-md'>Remove</button>
+  function renderInvoices(data = invoices) {
+    tableBody.innerHTML = "";
+    data.forEach((inv, index) => {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td class="px-4 py-2">${index + 1}</td>
+        <td class="px-4 py-2">${inv.customer}</td>
+        <td class="px-4 py-2">${inv.type}</td>
+        <td class="px-4 py-2">$${parseFloat(inv.total).toFixed(2)}</td>
+        <td class="px-4 py-2">${inv.date}</td>
+        <td class="px-4 py-2 space-x-2">
+          <button class="export-btn px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600" data-index="${index}">Export</button>
+          <button class="delete-btn px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600" data-index="${index}">Delete</button>
+        </td>
       `;
-      const inputs = div.querySelectorAll('input');
-      inputs[0].addEventListener('input', e => { i.name = e.target.value; renderPreview(); });
-      inputs[1].addEventListener('input', e => { i.qty = Number(e.target.value); renderPreview(); });
-      inputs[2].addEventListener('input', e => { i.price = Number(e.target.value); renderPreview(); });
-      div.querySelector('button').addEventListener('click', () => removeItem(i.id));
-      itemsContainer.appendChild(div);
+      tableBody.appendChild(row);
     });
-    updateTotals();
+
+    // Attach event listeners for buttons
+    document.querySelectorAll(".delete-btn").forEach(btn => {
+      btn.addEventListener("click", e => {
+        const idx = e.target.dataset.index;
+        invoices.splice(idx, 1);
+        localStorage.setItem("invoices", JSON.stringify(invoices));
+        renderInvoices();
+        renderStats();
+      });
+    });
+
+    document.querySelectorAll(".export-btn").forEach(btn => {
+      btn.addEventListener("click", async e => {
+        const idx = e.target.dataset.index;
+        const inv = invoices[idx];
+        const { jsPDF } = window.jspdf;
+
+        const pdf = new jsPDF("p", "pt", "a4");
+        const content = `
+Invoice for: ${inv.customer}
+Business Type: ${inv.type}
+Total: $${parseFloat(inv.total).toFixed(2)}
+Date: ${inv.date}
+Items: ${inv.items ? inv.items.map(i => `${i.name} x${i.qty} $${i.price}`).join(", ") : "N/A"}
+        `;
+        pdf.text(content, 40, 50);
+        pdf.save(`${inv.customer}_Invoice.pdf`);
+      });
+    });
   }
 
-  // Calculate totals
-  function updateTotals() {
-    const subtotal = items.reduce((a, b) => a + b.qty * b.price, 0);
-    const tax = subtotal * 0.085;
-    const discount = 0;
-    const total = subtotal + tax - discount;
-    subtotalEl.textContent = `$${subtotal.toFixed(2)}`;
-    taxEl.textContent = `$${tax.toFixed(2)}`;
-    discountEl.textContent = `$${discount.toFixed(2)}`;
-    totalEl.textContent = `$${total.toFixed(2)}`;
-  }
-
-  // Render live preview
-  function renderPreview() {
-    previewContent.innerHTML = items.map(i => `
-      <div class='flex justify-between'>
-        <span>${i.name}</span>
-        <span>${i.qty} x $${i.price.toFixed(2)}</span>
-      </div>
-    `).join('');
-  }
-
-  // Add item button
-  addItemBtn.addEventListener('click', () => addItem());
-
-  // Export PDF
-  exportPdfBtn.addEventListener('click', async () => {
-    const canvas = await html2canvas(document.getElementById('invoicePreview'));
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF();
-    pdf.addImage(imgData, 'PNG', 0, 0);
-    pdf.save('invoice.pdf');
+  // Search
+  searchBox.addEventListener("input", e => {
+    const term = e.target.value.toLowerCase();
+    const filtered = invoices.filter(inv => inv.customer.toLowerCase().includes(term));
+    renderInvoices(filtered);
+    renderStats(filtered);
   });
 
-  // Initialize with sample item
-  addItem('Sample Item', 1, 49.99);
+  // Sort
+  sortSelect.addEventListener("change", e => {
+    let sorted = [...invoices];
+    switch (e.target.value) {
+      case "dateAsc":
+        sorted.sort((a, b) => new Date(a.date) - new Date(b.date)); break;
+      case "dateDesc":
+        sorted.sort((a, b) => new Date(b.date) - new Date(a.date)); break;
+      case "totalAsc":
+        sorted.sort((a, b) => a.total - b.total); break;
+      case "totalDesc":
+        sorted.sort((a, b) => b.total - a.total); break;
+    }
+    renderInvoices(sorted);
+    renderStats(sorted);
+  });
+
+  renderInvoices();
+  renderStats();
 });
