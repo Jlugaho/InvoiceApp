@@ -100,7 +100,7 @@ function createDocument(ids) {
 function runDashboard(invoices) {
   const document = createDocument([
     'invoiceTable', 'totalInvoices', 'totalRevenue', 'topBusinessType', 'searchBox', 'sortSelect',
-    'backupInvoicesBtn', 'restoreInvoicesInput'
+    'backupInvoicesBtn', 'restoreInvoicesInput', 'importLocalInvoicesBtn', 'dashboardError'
   ]);
   const saved = new Map([['invoices', JSON.stringify(invoices)]]);
   const storage = {
@@ -110,6 +110,47 @@ function runDashboard(invoices) {
   const exported = [];
   const downloaded = [];
   const alerts = [];
+  let ready;
+  const invoiceRequest = (route, options = {}) => {
+    let invoices = JSON.parse(saved.get('invoices'));
+    if (route === '/api/invoices' && !options.method) {
+      invoices = invoices.map((invoice, index) => ({
+        ...invoice,
+        id: invoice.id || `existing-${index}`,
+        status: invoice.status || 'draft'
+      }));
+      saved.set('invoices', JSON.stringify(invoices));
+      return Promise.resolve(invoices);
+    }
+    if (route === '/api/invoices/import' || (route === '/api/invoices' && options.method === 'PUT')) {
+      const invalid = options.body.invoices.find(invoice =>
+        !invoice.customer || !invoice.type || !invoice.date ||
+        !Array.isArray(invoice.items) ||
+        invoice.items.some(item => !item.name || Number(item.qty) <= 0 || Number(item.price) < 0)
+      );
+      if (invalid) return Promise.reject(new Error('The backup contains invalid invoice data and was not restored.'));
+      invoices = options.body.invoices.map((invoice, index) => ({
+        ...invoice,
+        id: invoice.id || `imported-${index}`,
+        status: invoice.status || 'draft'
+      }));
+      saved.set('invoices', JSON.stringify(invoices));
+      return Promise.resolve(invoices);
+    }
+    if (route.startsWith('/api/invoices/') && options.method === 'PUT') {
+      const id = decodeURIComponent(route.split('/').pop());
+      const index = invoices.findIndex(invoice => invoice.id === id);
+      invoices[index] = options.body;
+      saved.set('invoices', JSON.stringify(invoices));
+      return Promise.resolve(options.body);
+    }
+    if (route.startsWith('/api/invoices/') && options.method === 'DELETE') {
+      const id = decodeURIComponent(route.split('/').pop());
+      saved.set('invoices', JSON.stringify(invoices.filter(invoice => invoice.id !== id)));
+      return Promise.resolve(null);
+    }
+    return Promise.reject(new Error(`Unexpected request: ${options.method || 'GET'} ${route}`));
+  };
   class JsPdf {
     text(content) { this.content = content; }
     save(filename) { exported.push({ content: this.content, filename }); }
@@ -119,6 +160,10 @@ function runDashboard(invoices) {
     localStorage: storage,
     window: {
       jspdf: { jsPDF: JsPdf },
+      InvoiceAuth: {
+        onAuthenticated: callback => { ready = callback(); },
+        request: invoiceRequest
+      },
       crypto: { randomUUID: () => `generated-${Math.random()}` },
       confirm: () => true,
       alert: message => alerts.push(message)
@@ -132,7 +177,7 @@ function runDashboard(invoices) {
       revokeObjectURL() {}
     }
   });
-  return { document, saved, exported, downloaded, alerts };
+  return { document, saved, exported, downloaded, alerts, ready };
 }
 
 function runInvoiceEditor(invoices = [], query = '') {
@@ -142,27 +187,56 @@ function runInvoiceEditor(invoices = [], query = '') {
     'invoiceFormError'
   ]);
   const saved = new Map([['invoices', JSON.stringify(invoices)]]);
+  const invoiceRequest = (route, options = {}) => {
+    const stored = JSON.parse(saved.get('invoices'));
+    if (!options.method && route === '/api/invoices') return Promise.resolve(stored);
+    if (!options.method && route.startsWith('/api/invoices/')) {
+      return Promise.resolve(stored.find(invoice => invoice.id === decodeURIComponent(route.split('/').pop())));
+    }
+    if (options.method === 'POST') {
+      const invoice = { ...options.body, id: 'new-invoice', status: 'draft' };
+      stored.push(invoice);
+      saved.set('invoices', JSON.stringify(stored));
+      return Promise.resolve(invoice);
+    }
+    if (options.method === 'PUT') {
+      const id = decodeURIComponent(route.split('/').pop());
+      const index = stored.findIndex(invoice => invoice.id === id);
+      stored[index] = options.body;
+      saved.set('invoices', JSON.stringify(stored));
+      return Promise.resolve(options.body);
+    }
+    return Promise.reject(new Error(`Unexpected request: ${options.method || 'GET'} ${route}`));
+  };
+  let ready;
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'script.js'), 'utf8'), {
     document,
     localStorage: {
       getItem: key => saved.get(key) || null,
       setItem: (key, value) => saved.set(key, value)
     },
-    window: { location: { search: query } },
+    window: {
+      location: { search: query },
+      InvoiceAuth: {
+        onAuthenticated: callback => { ready = callback(); },
+        request: invoiceRequest
+      }
+    },
     URLSearchParams,
     alert() {},
     html2canvas() {}
   });
-  return { document, saved };
+  return { document, saved, ready };
 }
 
-test('dashboard delete and export actions keep targeting their invoice after search and sort', () => {
+test('dashboard delete and export actions keep targeting their invoice after search and sort', async () => {
   const invoices = [
     { customer: 'Alex', type: 'shop', total: 40, date: '2024-01-01' },
     { customer: 'Sam', type: 'cafe', total: 10, date: '2024-01-02' },
     { customer: 'Alexandra', type: 'shop', total: 20, date: '2024-01-03' }
   ];
-  const { document, saved, exported } = runDashboard(invoices);
+  const { document, saved, exported, ready } = runDashboard(invoices);
+  await ready;
   const search = document.elements.searchBox;
   const sort = document.elements.sortSelect;
   search.value = 'alex';
@@ -172,20 +246,21 @@ test('dashboard delete and export actions keep targeting their invoice after sea
 
   const rows = document.elements.invoiceTable.children;
   assert.equal(rows.length, 2);
-  rows[1].children[6].children[1].trigger('click');
+  await rows[1].children[6].children[1].trigger('click');
   assert.match(exported[0].content, /Invoice for: Alexandra/);
   assert.equal(exported[0].filename, 'Alexandra_Invoice.pdf');
 
-  rows[0].children[6].children[2].trigger('click');
+  await rows[0].children[6].children[2].trigger('click');
   assert.deepEqual(JSON.parse(saved.get('invoices')).map(invoice => invoice.customer), ['Sam', 'Alexandra']);
   assert.equal(document.elements.invoiceTable.children.length, 1);
 });
 
-test('dashboard renders customer and business text without interpreting it as markup', () => {
+test('dashboard renders customer and business text without interpreting it as markup', async () => {
   const maliciousText = '<img src=x onerror=alert(1)>';
-  const { document } = runDashboard([
+  const { document, ready } = runDashboard([
     { customer: maliciousText, type: '<b>Shop</b>', total: 5, date: '2024-01-01' }
   ]);
+  await ready;
   const row = document.elements.invoiceTable.children[0];
   assert.equal(row.children[1].textContent, maliciousText);
   assert.equal(row.children[2].textContent, '<b>Shop</b>');
@@ -243,9 +318,9 @@ test('preview customer, business, and item text remains text when it contains ma
   assert.equal(preview.children[0].children[1].children.length, 0);
 });
 
-test('invoice creation validates required customer and item fields before saving', () => {
+test('invoice creation validates required customer and item fields before saving', async () => {
   const { document, saved } = runInvoiceEditor();
-  document.elements.saveInvoiceBtn.trigger('click');
+  await document.elements.saveInvoiceBtn.trigger('click');
   assert.match(document.elements.invoiceFormError.textContent, /customer name and business type/);
   assert.deepEqual(JSON.parse(saved.get('invoices')), []);
 
@@ -258,13 +333,13 @@ test('invoice creation validates required customer and item fields before saving
   document.elements.itemsContainer.children[0].children[1].trigger('input');
   document.elements.itemsContainer.children[0].children[2].value = '10';
   document.elements.itemsContainer.children[0].children[2].trigger('input');
-  document.elements.saveInvoiceBtn.trigger('click');
+  await document.elements.saveInvoiceBtn.trigger('click');
   assert.match(document.elements.invoiceFormError.textContent, /quantity greater than zero/);
   assert.deepEqual(JSON.parse(saved.get('invoices')), []);
 
   document.elements.itemsContainer.children[0].children[1].value = '2';
   document.elements.itemsContainer.children[0].children[1].trigger('input');
-  document.elements.saveInvoiceBtn.trigger('click');
+  await document.elements.saveInvoiceBtn.trigger('click');
   const [invoice] = JSON.parse(saved.get('invoices'));
   assert.equal(invoice.customer, 'Taylor');
   assert.equal(invoice.status, 'draft');
@@ -272,7 +347,7 @@ test('invoice creation validates required customer and item fields before saving
   assert.ok(invoice.id);
 });
 
-test('editing a saved invoice updates it without changing its id, status, or invoice date', () => {
+test('editing a saved invoice updates it without changing its id, status, or invoice date', async () => {
   const original = {
     id: 'invoice-123',
     status: 'sent',
@@ -284,12 +359,13 @@ test('editing a saved invoice updates it without changing its id, status, or inv
     tax: 0.85,
     total: 10.85
   };
-  const { document, saved } = runInvoiceEditor([original], '?invoice=invoice-123');
+  const { document, saved, ready } = runInvoiceEditor([original], '?invoice=invoice-123');
+  await ready;
   assert.equal(document.elements.saveInvoiceBtn.textContent, 'Update Invoice');
   assert.equal(document.elements.itemsContainer.children.length, 1);
   document.elements.itemsContainer.children[0].children[2].value = '20';
   document.elements.itemsContainer.children[0].children[2].trigger('input');
-  document.elements.saveInvoiceBtn.trigger('click');
+  await document.elements.saveInvoiceBtn.trigger('click');
 
   const invoices = JSON.parse(saved.get('invoices'));
   assert.equal(invoices.length, 1);
@@ -301,11 +377,12 @@ test('editing a saved invoice updates it without changing its id, status, or inv
 
 test('dashboard persists invoice status changes and exports a versioned backup', async () => {
   const invoice = { customer: 'Taylor', type: 'Consulting', total: 10, date: '2025-01-02' };
-  const { document, saved, downloaded } = runDashboard([invoice]);
+  const { document, saved, downloaded, ready } = runDashboard([invoice]);
+  await ready;
   const row = document.elements.invoiceTable.children[0];
   assert.equal(row.children[5].children[0].value, 'draft');
   row.children[5].children[0].value = 'paid';
-  row.children[5].children[0].trigger('change');
+  await row.children[5].children[0].trigger('change');
   assert.equal(JSON.parse(saved.get('invoices'))[0].status, 'paid');
 
   document.elements.backupInvoicesBtn.trigger('click');
@@ -316,9 +393,10 @@ test('dashboard persists invoice status changes and exports a versioned backup',
 });
 
 test('restoring a versioned backup replaces saved invoices and preserves its data', async () => {
-  const { document, saved } = runDashboard([
+  const { document, saved, ready } = runDashboard([
     { customer: 'Existing', type: 'Shop', total: 5, date: '2025-01-01' }
   ]);
+  await ready;
   const restoredInvoice = {
     id: 'restored-1',
     status: 'paid',
@@ -342,9 +420,10 @@ test('restoring a versioned backup replaces saved invoices and preserves its dat
 });
 
 test('invalid backup invoice data is rejected without replacing saved invoices', async () => {
-  const { document, saved, alerts } = runDashboard([
+  const { document, saved, ready } = runDashboard([
     { customer: 'Existing', type: 'Shop', total: 5, date: '2025-01-01' }
   ]);
+  await ready;
   const previous = saved.get('invoices');
   document.elements.restoreInvoicesInput.files = [{
     text: async () => JSON.stringify({
@@ -355,5 +434,5 @@ test('invalid backup invoice data is rejected without replacing saved invoices',
   }];
   await document.elements.restoreInvoicesInput.trigger('change');
   assert.equal(saved.get('invoices'), previous);
-  assert.match(alerts[0], /invalid invoice data/);
+  assert.match(document.elements.dashboardError.textContent, /invalid invoice data/);
 });

@@ -1,4 +1,4 @@
-document.addEventListener("DOMContentLoaded", () => {
+window.InvoiceAuth.onAuthenticated(() => {
   const tableBody = document.getElementById("invoiceTable");
   const totalInvoices = document.getElementById("totalInvoices");
   const totalRevenue = document.getElementById("totalRevenue");
@@ -7,62 +7,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const sortSelect = document.getElementById("sortSelect");
   const backupButton = document.getElementById("backupInvoicesBtn");
   const restoreInput = document.getElementById("restoreInvoicesInput");
+  const importButton = document.getElementById("importLocalInvoicesBtn");
+  const dashboardError = document.getElementById("dashboardError");
   const validStatuses = ["draft", "sent", "paid"];
 
-  let invoices = JSON.parse(localStorage.getItem("invoices")) || [];
-  let metadataChanged = false;
-  const invoiceIds = new Set();
-  invoices.forEach(invoice => {
-    if (typeof invoice.id !== "string" || !invoice.id || invoiceIds.has(invoice.id)) {
-      do {
-        invoice.id = createInvoiceId();
-      } while (invoiceIds.has(invoice.id));
-      metadataChanged = true;
-    }
-    invoiceIds.add(invoice.id);
-    if (!validStatuses.includes(invoice.status)) {
-      invoice.status = "draft";
-      metadataChanged = true;
-    }
-  });
-  if (metadataChanged) saveInvoices();
-
-  function createInvoiceId() {
-    return window.crypto && window.crypto.randomUUID
-      ? window.crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  }
-
-  function saveInvoices() {
-    localStorage.setItem("invoices", JSON.stringify(invoices));
-  }
-
-  function isValidBackupInvoice(invoice) {
-    if (
-      !invoice ||
-      typeof invoice.customer !== "string" ||
-      !invoice.customer.trim() ||
-      typeof invoice.type !== "string" ||
-      !invoice.type.trim() ||
-      typeof invoice.date !== "string" ||
-      !invoice.date.trim() ||
-      !Number.isFinite(Number(invoice.total)) ||
-      (invoice.items !== undefined && !Array.isArray(invoice.items))
-    ) {
-      return false;
-    }
-    return (invoice.items || []).every(item =>
-      item &&
-      typeof item.name === "string" &&
-      item.name.trim() &&
-      item.qty !== "" &&
-      Number.isFinite(Number(item.qty)) &&
-      Number(item.qty) > 0 &&
-      item.price !== "" &&
-      Number.isFinite(Number(item.price)) &&
-      Number(item.price) >= 0
-    );
-  }
+  let invoices = [];
 
   function renderStats(data) {
     totalInvoices.textContent = data.length;
@@ -100,9 +49,18 @@ document.addEventListener("DOMContentLoaded", () => {
       select.appendChild(option);
     });
     select.value = invoice.status;
-    select.addEventListener("change", () => {
+    select.addEventListener("change", async () => {
       invoice.status = select.value;
-      saveInvoices();
+      try {
+        await window.InvoiceAuth.request(`/api/invoices/${encodeURIComponent(invoice.id)}`, {
+          method: "PUT",
+          body: invoice
+        });
+        dashboardError.textContent = "";
+      } catch (error) {
+        dashboardError.textContent = error.message;
+        await loadInvoices();
+      }
     });
     return select;
   }
@@ -172,12 +130,16 @@ Items: ${inv.items ? inv.items.map(i => `${i.name} x${i.qty} $${i.price}`).join(
       const deleteButton = document.createElement("button");
       deleteButton.className = "delete-btn px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600";
       deleteButton.textContent = "Delete";
-      deleteButton.addEventListener("click", () => {
-        const invoiceIndex = invoices.indexOf(inv);
-        if (invoiceIndex === -1) return;
-        invoices.splice(invoiceIndex, 1);
-        saveInvoices();
-        updateDashboard();
+      deleteButton.addEventListener("click", async () => {
+        try {
+          await window.InvoiceAuth.request(`/api/invoices/${encodeURIComponent(inv.id)}`, {
+            method: "DELETE"
+          });
+          dashboardError.textContent = "";
+          await loadInvoices();
+        } catch (error) {
+          dashboardError.textContent = error.message;
+        }
       });
 
       actions.append(editLink, exportButton, deleteButton);
@@ -215,39 +177,62 @@ Items: ${inv.items ? inv.items.map(i => `${i.name} x${i.qty} $${i.price}`).join(
       if (backup.format !== "invoiceapp-backup" || backup.version !== 1 || !Array.isArray(backup.invoices)) {
         throw new Error("This file is not a supported InvoiceApp backup.");
       }
-      if (!backup.invoices.every(isValidBackupInvoice)) {
-        throw new Error("The backup contains invalid invoice data and was not restored.");
-      }
       if (!window.confirm(`Replace your ${invoices.length} saved invoices with ${backup.invoices.length} backed-up invoices?`)) {
         restoreInput.value = "";
         return;
       }
-      const restoredIds = new Set();
-      invoices = backup.invoices.map(invoice => {
-        let id = typeof invoice.id === "string" && invoice.id && !restoredIds.has(invoice.id)
-          ? invoice.id
-          : createInvoiceId();
-        while (restoredIds.has(id)) id = createInvoiceId();
-        restoredIds.add(id);
-        return {
-          ...invoice,
-          id,
-          items: invoice.items || [],
-          status: validStatuses.includes(invoice.status) ? invoice.status : "draft"
-        };
+      invoices = await window.InvoiceAuth.request("/api/invoices", {
+        method: "PUT",
+        body: { invoices: backup.invoices }
       });
-      saveInvoices();
       restoreInput.value = "";
       updateDashboard();
-      window.alert("Backup restored.");
+      dashboardError.textContent = "Backup restored.";
     } catch (error) {
       restoreInput.value = "";
-      window.alert(error.message);
+      dashboardError.textContent = error.message;
+    }
+  });
+
+  importButton.addEventListener("click", async () => {
+    let localInvoices;
+    try {
+      localInvoices = JSON.parse(localStorage.getItem("invoices")) || [];
+      if (!Array.isArray(localInvoices)) throw new Error("The saved browser data is not a valid invoice list.");
+      if (!window.confirm(`Import ${localInvoices.length} invoices from this browser into the server?`)) return;
+      invoices = await window.InvoiceAuth.request("/api/invoices/import", {
+        method: "POST",
+        body: { invoices: localInvoices }
+      });
+      dashboardError.textContent = "Invoices imported. Your browser copy was kept unchanged.";
+      updateDashboard();
+      importButton.hidden = true;
+    } catch (error) {
+      dashboardError.textContent = error.message;
     }
   });
 
   searchBox.addEventListener("input", updateDashboard);
   sortSelect.addEventListener("change", updateDashboard);
 
-  updateDashboard();
+  async function loadInvoices() {
+    try {
+      invoices = await window.InvoiceAuth.request("/api/invoices");
+      importButton.hidden = true;
+      if (invoices.length === 0) {
+        try {
+          const localInvoices = JSON.parse(localStorage.getItem("invoices")) || [];
+          importButton.hidden = !Array.isArray(localInvoices) || localInvoices.length === 0;
+        } catch {
+          importButton.hidden = true;
+        }
+      }
+      dashboardError.textContent = "";
+      updateDashboard();
+    } catch (error) {
+      dashboardError.textContent = error.message;
+    }
+  }
+
+  return loadInvoices();
 });

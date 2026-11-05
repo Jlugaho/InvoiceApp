@@ -1,3 +1,4 @@
+window.InvoiceAuth.onAuthenticated(() => {
 // ==== Variables ====
 const themeToggle = document.getElementById('themeToggle');
 const addItemBtn = document.getElementById('addItemBtn');
@@ -17,6 +18,8 @@ let invoiceItemsArray = [];
 const TAX_RATE = 0.085;
 let discount = 0;
 let editingInvoiceId = new URLSearchParams(window.location.search || '').get('invoice');
+let editingInvoiceDate = '';
+let editingInvoiceStatus = 'draft';
 
 customerNameInput.addEventListener('input', updatePreview);
 businessTypeInput.addEventListener('input', updatePreview);
@@ -185,7 +188,7 @@ function createElement(tag, className, text) {
 }
 
 // ==== Save Invoice ====
-saveInvoiceBtn.addEventListener('click', () => {
+saveInvoiceBtn.addEventListener('click', async () => {
   const invalidItem = invoiceItemsArray.find(item =>
     !item.name.trim() ||
     !Number.isFinite(Number(item.qty)) ||
@@ -206,22 +209,14 @@ saveInvoiceBtn.addEventListener('click', () => {
     return;
   }
 
-  const invoices = JSON.parse(localStorage.getItem('invoices')) || [];
-  const existingIndex = editingInvoiceId
-    ? invoices.findIndex(invoice => invoice.id === editingInvoiceId)
-    : -1;
-  if (editingInvoiceId && existingIndex === -1) {
-    invoiceFormError.textContent = 'This invoice could not be found. Return to the dashboard and try again.';
-    return;
-  }
-  const existingInvoice = existingIndex >= 0 ? invoices[existingIndex] : null;
   const subtotal = invoiceItemsArray.reduce((sum, item) => sum + Number(item.qty) * Number(item.price), 0);
+  const wasEditing = Boolean(editingInvoiceId);
   const invoice = {
     id: editingInvoiceId || createInvoiceId(),
-    status: existingInvoice?.status || 'draft',
+    status: editingInvoiceStatus,
     customer: customerNameInput.value.trim(),
     type: businessTypeInput.value.trim(),
-    date: existingInvoice?.date || new Date().toLocaleDateString(),
+    date: editingInvoiceDate || new Date().toISOString().slice(0, 10),
     items: invoiceItemsArray.map(item => ({
       name: item.name.trim(),
       qty: Number(item.qty),
@@ -233,40 +228,51 @@ saveInvoiceBtn.addEventListener('click', () => {
     total: subtotal * (1 + TAX_RATE) - discount
   };
 
-  if (existingIndex >= 0) {
-    invoices[existingIndex] = invoice;
-  } else {
-    invoices.push(invoice);
+  try {
+    const savedInvoice = await window.InvoiceAuth.request(
+      editingInvoiceId ? `/api/invoices/${encodeURIComponent(editingInvoiceId)}` : '/api/invoices',
+      {
+        method: editingInvoiceId ? 'PUT' : 'POST',
+        body: invoice
+      }
+    );
+    editingInvoiceId = savedInvoice.id;
+    editingInvoiceDate = savedInvoice.date;
+    editingInvoiceStatus = savedInvoice.status;
+    saveInvoiceBtn.textContent = 'Update Invoice';
+    invoiceFormError.textContent = wasEditing ? 'Invoice updated on the server.' : 'Invoice saved to the server.';
+  } catch (error) {
+    invoiceFormError.textContent = error.message;
   }
-  localStorage.setItem('invoices', JSON.stringify(invoices));
-  invoiceFormError.textContent = existingInvoice ? 'Invoice updated.' : 'Invoice saved.';
 });
 
-function loadInvoiceForEditing() {
+async function loadInvoiceForEditing() {
   if (!editingInvoiceId) return;
-  const invoices = JSON.parse(localStorage.getItem('invoices')) || [];
-  const invoice = invoices.find(savedInvoice => savedInvoice.id === editingInvoiceId);
-  if (!invoice) {
-    invoiceFormError.textContent = 'This invoice could not be found. Return to the dashboard and try again.';
-    return;
+  try {
+    const invoice = await window.InvoiceAuth.request(`/api/invoices/${encodeURIComponent(editingInvoiceId)}`);
+    customerNameInput.value = invoice.customer || '';
+    businessTypeInput.value = invoice.type || '';
+    editingInvoiceDate = invoice.date;
+    editingInvoiceStatus = invoice.status;
+    invoiceItemsArray = [];
+    itemsContainer.replaceChildren();
+    (invoice.items || []).forEach(item => {
+      const editableItem = { name: item.name || '', qty: item.qty ?? '', price: item.price ?? '' };
+      addItemRow(editableItem);
+    });
+    saveInvoiceBtn.textContent = 'Update Invoice';
+    updateTotals();
+    updatePreview();
+  } catch (error) {
+    invoiceFormError.textContent = error.message;
   }
-  customerNameInput.value = invoice.customer || '';
-  businessTypeInput.value = invoice.type || '';
-  invoiceItemsArray = [];
-  itemsContainer.replaceChildren();
-  (invoice.items || []).forEach(item => {
-    const editableItem = { name: item.name || '', qty: item.qty ?? '', price: item.price ?? '' };
-    addItemRow(editableItem);
-  });
-  saveInvoiceBtn.textContent = 'Update Invoice';
-  updateTotals();
-  updatePreview();
 }
 
-loadInvoiceForEditing();
 if (!editingInvoiceId) {
   updateTotals();
   updatePreview();
+} else {
+  return loadInvoiceForEditing();
 }
 
 // ==== Export PDF ====
@@ -283,4 +289,5 @@ exportPdfBtn.addEventListener('click', async () => {
   });
 
   pdf.save('InvoiceApp.pdf');
+});
 });
