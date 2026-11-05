@@ -1,0 +1,16 @@
+{
+  "name": "invoiceapp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "InvoiceApp with a local SQLite API",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.2.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  }
+}
