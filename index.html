@@ -30,8 +30,8 @@
 
       <!-- Customer & Business -->
       <div class="mb-4 flex flex-col gap-2">
-        <input type="text" id="customerName" placeholder="Customer Name" class="px-2 py-1 border rounded" />
-        <input type="text" id="businessType" placeholder="Business Type" class="px-2 py-1 border rounded" />
+        <input type="text" id="customerName" placeholder="Customer Name" aria-label="Customer name" required class="px-2 py-1 border rounded" />
+        <input type="text" id="businessType" placeholder="Business Type" aria-label="Business type" required class="px-2 py-1 border rounded" />
       </div>
 
       <h3 class="text-lg font-semibold mb-2 text-gray-700">Add Invoice Items</h3>
@@ -62,6 +62,7 @@
         <button id="saveInvoiceBtn" class="flex-1 bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600 transition">💾 Save Invoice</button>
         <button id="exportPdfBtn" class="flex-1 bg-green-500 text-white py-2 rounded-md hover:bg-green-600 transition">📄 Export PDF</button>
       </div>
+      <p id="invoiceFormError" class="mt-2 text-sm text-red-600" role="alert"></p>
     </section>
 
   </main>
@@ -78,4 +79,3 @@
   <script src="script.js"></script>
 </body>
 </html>
-

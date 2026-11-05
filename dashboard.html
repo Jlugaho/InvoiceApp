@@ -50,6 +50,14 @@
         <option value="totalDesc">Total ↓</option>
       </select>
     </div>
+    <div class="flex flex-wrap gap-2 mb-4">
+      <button id="backupInvoicesBtn" class="px-4 py-2 bg-indigo-600 text-white rounded">Download backup</button>
+      <label class="px-4 py-2 bg-gray-200 rounded cursor-pointer">
+        Restore backup
+        <input id="restoreInvoicesInput" type="file" accept="application/json,.json" class="sr-only">
+      </label>
+      <p class="w-full text-sm text-gray-600">Invoices are stored in this browser. Download a backup to move them to another device or restore them later.</p>
+    </div>
 
     <!-- Invoice Table -->
     <div class="bg-white rounded-lg shadow overflow-x-auto">
@@ -61,6 +69,7 @@
             <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Business Type</th>
             <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Total ($)</th>
             <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Date</th>
+            <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Status</th>
             <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Actions</th>
           </tr>
         </thead>
