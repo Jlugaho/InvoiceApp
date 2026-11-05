@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const Database = require("better-sqlite3");
 const { createServer } = require("../server");
 
 const accessKey = "test-access-key-with-at-least-thirty-two-bytes";
@@ -135,11 +136,138 @@ test("server requires a runtime API key and only serves allowed static files", a
 
   const page = await fetch(baseUrl);
   assert.equal(page.status, 200);
-  assert.match(await page.text(), /InvoiceApp/);
+  const html = await page.text();
+  assert.match(html, /InvoiceApp/);
+  const scriptPath = /src="([^"]+\.js)"/.exec(html)?.[1];
+  assert.ok(scriptPath);
+  assert.equal((await fetch(`${baseUrl}${scriptPath}`)).status, 200);
   const hidden = await fetch(`${baseUrl}/.git/config`);
   assert.equal(hidden.status, 404);
   const source = await fetch(`${baseUrl}/server.js`);
   assert.equal(source.status, 404);
   const traversal = await fetch(`${baseUrl}/..%5C..%5CWindows%5Cwin.ini`);
   assert.equal(traversal.status, 404);
+});
+
+test("business records persist and invoice payments update balances", async t => {
+  const server = createServer({ apiToken: accessKey, dbPath: ":memory:" });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+
+  async function request(route, { method = "GET", body } = {}) {
+    const response = await fetch(`${baseUrl}${route}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${accessKey}`,
+        ...(body === undefined ? {} : { "Content-Type": "application/json" })
+      },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    });
+    return { response, data: response.status === 204 ? null : await response.json() };
+  }
+
+  const customer = await request("/api/customers", {
+    method: "POST",
+    body: { name: "Jordan Lee", company: "Northline Workshop", email: "jordan@example.com", phone: "555-0104", address: "10 Market St" }
+  });
+  assert.equal(customer.response.status, 201);
+  assert.ok(customer.data.id);
+  assert.equal((await request("/api/customers")).data[0].name, "Jordan Lee");
+  const invalidCustomer = await request("/api/customers", { method: "POST", body: { name: "Bad email", email: "not-an-email" } });
+  assert.equal(invalidCustomer.response.status, 400);
+
+  const product = await request("/api/products", { method: "POST", body: { name: "Brake inspection", price: 89, category: "Auto service", taxRate: 7.5 } });
+  assert.equal(product.data.price, 89);
+  const estimate = await request("/api/estimates", { method: "POST", body: { customer: "Jordan Lee", total: 250, status: "accepted" } });
+  assert.equal(estimate.data.status, "accepted");
+  const expense = await request("/api/expenses", { method: "POST", body: { description: "Replacement parts", amount: 42.55, vendor: "Parts Supply", category: "Materials" } });
+  assert.equal(expense.data.amount, 42.55);
+
+  const invoice = await request("/api/invoices", {
+    method: "POST",
+    body: {
+      customer: "Jordan Lee",
+      customerId: customer.data.id,
+      type: "Northline Workshop",
+      invoiceNumber: "INV-2025-0001",
+      date: "2025-03-01",
+      dueDate: "2025-04-01",
+      currency: "USD",
+      terms: "Net 30",
+      notes: "Thank you.",
+      status: "sent",
+      items: [{ name: "Brake inspection", qty: 1, price: 100, taxRate: 5 }]
+    }
+  });
+  assert.equal(invoice.data.total, 105);
+  assert.equal(invoice.data.invoiceNumber, "INV-2025-0001");
+  assert.equal(invoice.data.customerId, customer.data.id);
+
+  const payment = await request("/api/payments", {
+    method: "POST",
+    body: { invoiceId: invoice.data.id, amount: 45, method: "Bank transfer", reference: "TRX-0042", date: "2025-03-15" }
+  });
+  assert.equal(payment.response.status, 201);
+  assert.equal(payment.data.customer, "Jordan Lee");
+  assert.equal((await request(`/api/invoices/${invoice.data.id}`)).data.amountPaid, 45);
+  const overpayment = await request("/api/payments", { method: "POST", body: { invoiceId: invoice.data.id, amount: 61 } });
+  assert.equal(overpayment.response.status, 400);
+  const secondPayment = await request("/api/payments", { method: "POST", body: { invoiceId: invoice.data.id, amount: 60, method: "Cash" } });
+  assert.equal((await request(`/api/invoices/${invoice.data.id}`)).data.amountPaid, 105);
+  await request(`/api/payments/${secondPayment.data.id}`, { method: "DELETE" });
+  assert.equal((await request(`/api/invoices/${invoice.data.id}`)).data.amountPaid, 45);
+
+  const settings = await request("/api/settings", { method: "PUT", body: { businessName: "Northline Workshop", ownerEmail: "hello@northline.example", paymentInstructions: "Bank transfer preferred." } });
+  assert.equal(settings.data.businessName, "Northline Workshop");
+  assert.equal((await request("/api/settings")).data.paymentInstructions, "Bank transfer preferred.");
+
+  await request(`/api/customers/${customer.data.id}`, { method: "PUT", body: { name: "Jordan Lee", company: "Northline Garage" } });
+  assert.equal((await request("/api/customers")).data[0].company, "Northline Garage");
+});
+
+test("existing invoice databases migrate without losing saved invoices", async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "invoiceapp-legacy-"));
+  const dbPath = path.join(directory, "legacy.sqlite");
+  const legacy = new Database(dbPath);
+  legacy.exec(`
+    CREATE TABLE invoices (
+      id TEXT PRIMARY KEY,
+      customer TEXT NOT NULL,
+      business_type TEXT NOT NULL,
+      invoice_date TEXT NOT NULL,
+      items_json TEXT NOT NULL,
+      subtotal REAL NOT NULL,
+      tax REAL NOT NULL,
+      discount REAL NOT NULL,
+      total REAL NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('draft', 'sent', 'paid')),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+  const id = "11b9aacc-1c85-4be4-8e02-84b25d376355";
+  legacy.prepare(`
+    INSERT INTO invoices
+    (id, customer, business_type, invoice_date, items_json, subtotal, tax, discount, total, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, "Maya Chen", "Northline Auto & Repair", "2025-03-01", JSON.stringify([{ name: "Oil service", qty: 1, price: 100 }]), 100, 8.5, 0, 108.5, "sent", "2025-03-01T10:00:00.000Z", "2025-03-01T10:00:00.000Z");
+  legacy.close();
+
+  const server = createServer({ apiToken: accessKey, dbPath });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(async () => {
+    await new Promise(resolve => server.close(resolve));
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/invoices`, {
+    headers: { Authorization: `Bearer ${accessKey}` }
+  });
+  assert.equal(response.status, 200);
+  const [invoice] = await response.json();
+  assert.equal(invoice.id, id);
+  assert.equal(invoice.customer, "Maya Chen");
+  assert.equal(invoice.dueDate, "");
+  assert.equal(invoice.currency, "USD");
+  assert.equal(invoice.items[0].name, "Oil service");
 });
