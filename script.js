@@ -11,10 +11,12 @@ const totalEl = document.getElementById('total');
 const previewContent = document.getElementById('previewContent');
 const customerNameInput = document.getElementById('customerName');
 const businessTypeInput = document.getElementById('businessType');
+const invoiceFormError = document.getElementById('invoiceFormError');
 
 let invoiceItemsArray = [];
 const TAX_RATE = 0.085;
 let discount = 0;
+let editingInvoiceId = new URLSearchParams(window.location.search || '').get('invoice');
 
 customerNameInput.addEventListener('input', updatePreview);
 businessTypeInput.addEventListener('input', updatePreview);
@@ -30,12 +32,25 @@ themeToggle.addEventListener('click', () => {
 
 // ==== Add Item Functionality ====
 addItemBtn.addEventListener('click', () => {
-  const item = { name: '', qty: 0, price: 0 };
+  addItemRow({ name: '', qty: '', price: '' });
+});
+
+function addItemRow(item) {
   const div = document.createElement('div');
   div.classList.add('flex', 'gap-2', 'mb-2', 'items-center');
   const nameInput = createInput('text', 'Item Name', 'flex-1 px-2 py-1 border rounded');
   const quantityInput = createInput('number', 'Qty', 'w-16 px-2 py-1 border rounded');
   const priceInput = createInput('number', 'Price', 'w-24 px-2 py-1 border rounded');
+  nameInput.required = true;
+  quantityInput.required = true;
+  quantityInput.min = '0.01';
+  quantityInput.step = 'any';
+  priceInput.required = true;
+  priceInput.min = '0';
+  priceInput.step = 'any';
+  nameInput.value = item.name || '';
+  quantityInput.value = item.qty ?? '';
+  priceInput.value = item.price ?? '';
   const removeButton = document.createElement('button');
   removeButton.className = 'remove-item px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600';
   removeButton.textContent = '✕';
@@ -70,7 +85,7 @@ addItemBtn.addEventListener('click', () => {
 
   updateTotals();
   updatePreview();
-});
+}
 
 function createInput(type, placeholder, className) {
   const input = document.createElement('input');
@@ -78,6 +93,12 @@ function createInput(type, placeholder, className) {
   input.placeholder = placeholder;
   input.className = className;
   return input;
+}
+
+function createInvoiceId() {
+  return window.crypto && window.crypto.randomUUID
+    ? window.crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 // ==== Update Totals ====
@@ -165,32 +186,88 @@ function createElement(tag, className, text) {
 
 // ==== Save Invoice ====
 saveInvoiceBtn.addEventListener('click', () => {
-  if(invoiceItemsArray.length === 0){
-    alert("Add some items first!");
+  const invalidItem = invoiceItemsArray.find(item =>
+    !item.name.trim() ||
+    !Number.isFinite(Number(item.qty)) ||
+    Number(item.qty) <= 0 ||
+    !Number.isFinite(Number(item.price)) ||
+    Number(item.price) < 0
+  );
+  if (!customerNameInput.value.trim() || !businessTypeInput.value.trim()) {
+    invoiceFormError.textContent = 'Enter both a customer name and business type.';
+    return;
+  }
+  if (invoiceItemsArray.length === 0) {
+    invoiceFormError.textContent = 'Add at least one invoice item.';
+    return;
+  }
+  if (invalidItem) {
+    invoiceFormError.textContent = 'Each item needs a name, a quantity greater than zero, and a valid non-negative price.';
     return;
   }
 
-  const customer = customerNameInput.value || "Anonymous";
-  const business = businessTypeInput.value || "General";
-  const invoiceDate = new Date().toLocaleDateString();
-
-  const newInvoice = {
-    customer,
-    type: business,
-    date: invoiceDate,
-    items: invoiceItemsArray,
-    subtotal: invoiceItemsArray.reduce((sum, i) => sum + (i.qty * i.price || 0), 0),
-    tax: invoiceItemsArray.reduce((sum, i) => sum + (i.qty * i.price || 0), 0) * TAX_RATE,
+  const invoices = JSON.parse(localStorage.getItem('invoices')) || [];
+  const existingIndex = editingInvoiceId
+    ? invoices.findIndex(invoice => invoice.id === editingInvoiceId)
+    : -1;
+  if (editingInvoiceId && existingIndex === -1) {
+    invoiceFormError.textContent = 'This invoice could not be found. Return to the dashboard and try again.';
+    return;
+  }
+  const existingInvoice = existingIndex >= 0 ? invoices[existingIndex] : null;
+  const subtotal = invoiceItemsArray.reduce((sum, item) => sum + Number(item.qty) * Number(item.price), 0);
+  const invoice = {
+    id: editingInvoiceId || createInvoiceId(),
+    status: existingInvoice?.status || 'draft',
+    customer: customerNameInput.value.trim(),
+    type: businessTypeInput.value.trim(),
+    date: existingInvoice?.date || new Date().toLocaleDateString(),
+    items: invoiceItemsArray.map(item => ({
+      name: item.name.trim(),
+      qty: Number(item.qty),
+      price: Number(item.price)
+    })),
+    subtotal,
+    tax: subtotal * TAX_RATE,
     discount,
-    total: invoiceItemsArray.reduce((sum, i) => sum + (i.qty * i.price || 0), 0) * (1 + TAX_RATE) - discount
+    total: subtotal * (1 + TAX_RATE) - discount
   };
 
-  const invoices = JSON.parse(localStorage.getItem('invoices')) || [];
-  invoices.push(newInvoice);
+  if (existingIndex >= 0) {
+    invoices[existingIndex] = invoice;
+  } else {
+    invoices.push(invoice);
+  }
   localStorage.setItem('invoices', JSON.stringify(invoices));
-
-  alert('Invoice saved! You can now view it in the dashboard.');
+  invoiceFormError.textContent = existingInvoice ? 'Invoice updated.' : 'Invoice saved.';
 });
+
+function loadInvoiceForEditing() {
+  if (!editingInvoiceId) return;
+  const invoices = JSON.parse(localStorage.getItem('invoices')) || [];
+  const invoice = invoices.find(savedInvoice => savedInvoice.id === editingInvoiceId);
+  if (!invoice) {
+    invoiceFormError.textContent = 'This invoice could not be found. Return to the dashboard and try again.';
+    return;
+  }
+  customerNameInput.value = invoice.customer || '';
+  businessTypeInput.value = invoice.type || '';
+  invoiceItemsArray = [];
+  itemsContainer.replaceChildren();
+  (invoice.items || []).forEach(item => {
+    const editableItem = { name: item.name || '', qty: item.qty ?? '', price: item.price ?? '' };
+    addItemRow(editableItem);
+  });
+  saveInvoiceBtn.textContent = 'Update Invoice';
+  updateTotals();
+  updatePreview();
+}
+
+loadInvoiceForEditing();
+if (!editingInvoiceId) {
+  updateTotals();
+  updatePreview();
+}
 
 // ==== Export PDF ====
 exportPdfBtn.addEventListener('click', async () => {

@@ -5,8 +5,64 @@ document.addEventListener("DOMContentLoaded", () => {
   const topBusinessType = document.getElementById("topBusinessType");
   const searchBox = document.getElementById("searchBox");
   const sortSelect = document.getElementById("sortSelect");
+  const backupButton = document.getElementById("backupInvoicesBtn");
+  const restoreInput = document.getElementById("restoreInvoicesInput");
+  const validStatuses = ["draft", "sent", "paid"];
 
   let invoices = JSON.parse(localStorage.getItem("invoices")) || [];
+  let metadataChanged = false;
+  const invoiceIds = new Set();
+  invoices.forEach(invoice => {
+    if (typeof invoice.id !== "string" || !invoice.id || invoiceIds.has(invoice.id)) {
+      do {
+        invoice.id = createInvoiceId();
+      } while (invoiceIds.has(invoice.id));
+      metadataChanged = true;
+    }
+    invoiceIds.add(invoice.id);
+    if (!validStatuses.includes(invoice.status)) {
+      invoice.status = "draft";
+      metadataChanged = true;
+    }
+  });
+  if (metadataChanged) saveInvoices();
+
+  function createInvoiceId() {
+    return window.crypto && window.crypto.randomUUID
+      ? window.crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+
+  function saveInvoices() {
+    localStorage.setItem("invoices", JSON.stringify(invoices));
+  }
+
+  function isValidBackupInvoice(invoice) {
+    if (
+      !invoice ||
+      typeof invoice.customer !== "string" ||
+      !invoice.customer.trim() ||
+      typeof invoice.type !== "string" ||
+      !invoice.type.trim() ||
+      typeof invoice.date !== "string" ||
+      !invoice.date.trim() ||
+      !Number.isFinite(Number(invoice.total)) ||
+      (invoice.items !== undefined && !Array.isArray(invoice.items))
+    ) {
+      return false;
+    }
+    return (invoice.items || []).every(item =>
+      item &&
+      typeof item.name === "string" &&
+      item.name.trim() &&
+      item.qty !== "" &&
+      Number.isFinite(Number(item.qty)) &&
+      Number(item.qty) > 0 &&
+      item.price !== "" &&
+      Number.isFinite(Number(item.price)) &&
+      Number(item.price) >= 0
+    );
+  }
 
   function renderStats(data) {
     totalInvoices.textContent = data.length;
@@ -30,6 +86,25 @@ document.addEventListener("DOMContentLoaded", () => {
     cell.className = className;
     cell.textContent = value;
     return cell;
+  }
+
+  function createStatusSelect(invoice) {
+    const select = document.createElement("select");
+    select.className = "px-2 py-1 border rounded";
+    select.setAttribute("aria-label", `Status for ${invoice.customer}`);
+    validStatuses.forEach(status => {
+      const option = document.createElement("option");
+      option.value = status;
+      option.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+      if (invoice.status === status) option.selected = true;
+      select.appendChild(option);
+    });
+    select.value = invoice.status;
+    select.addEventListener("change", () => {
+      invoice.status = select.value;
+      saveInvoices();
+    });
+    return select;
   }
 
   function getVisibleInvoices() {
@@ -63,8 +138,18 @@ document.addEventListener("DOMContentLoaded", () => {
       row.appendChild(createCell(`$${parseFloat(inv.total).toFixed(2)}`, "px-4 py-2"));
       row.appendChild(createCell(inv.date, "px-4 py-2"));
 
+      const statusCell = document.createElement("td");
+      statusCell.className = "px-4 py-2";
+      statusCell.appendChild(createStatusSelect(inv));
+      row.appendChild(statusCell);
+
       const actions = document.createElement("td");
       actions.className = "px-4 py-2 space-x-2";
+
+      const editLink = document.createElement("a");
+      editLink.className = "edit-btn px-2 py-1 bg-blue-500 text-white rounded";
+      editLink.href = `index.html?invoice=${encodeURIComponent(inv.id)}`;
+      editLink.textContent = "Edit";
 
       const exportButton = document.createElement("button");
       exportButton.className = "export-btn px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600";
@@ -75,6 +160,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const content = `
 Invoice for: ${inv.customer}
 Business Type: ${inv.type}
+Status: ${inv.status}
 Total: $${parseFloat(inv.total).toFixed(2)}
 Date: ${inv.date}
 Items: ${inv.items ? inv.items.map(i => `${i.name} x${i.qty} $${i.price}`).join(", ") : "N/A"}
@@ -90,11 +176,11 @@ Items: ${inv.items ? inv.items.map(i => `${i.name} x${i.qty} $${i.price}`).join(
         const invoiceIndex = invoices.indexOf(inv);
         if (invoiceIndex === -1) return;
         invoices.splice(invoiceIndex, 1);
-        localStorage.setItem("invoices", JSON.stringify(invoices));
+        saveInvoices();
         updateDashboard();
       });
 
-      actions.append(exportButton, deleteButton);
+      actions.append(editLink, exportButton, deleteButton);
       row.appendChild(actions);
       tableBody.appendChild(row);
     });
@@ -105,6 +191,60 @@ Items: ${inv.items ? inv.items.map(i => `${i.name} x${i.qty} $${i.price}`).join(
     renderInvoices(visible);
     renderStats(visible);
   }
+
+  backupButton.addEventListener("click", () => {
+    const backup = {
+      format: "invoiceapp-backup",
+      version: 1,
+      invoices
+    };
+    const file = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(file);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `invoiceapp-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  });
+
+  restoreInput.addEventListener("change", async () => {
+    const file = restoreInput.files[0];
+    if (!file) return;
+    try {
+      const backup = JSON.parse(await file.text());
+      if (backup.format !== "invoiceapp-backup" || backup.version !== 1 || !Array.isArray(backup.invoices)) {
+        throw new Error("This file is not a supported InvoiceApp backup.");
+      }
+      if (!backup.invoices.every(isValidBackupInvoice)) {
+        throw new Error("The backup contains invalid invoice data and was not restored.");
+      }
+      if (!window.confirm(`Replace your ${invoices.length} saved invoices with ${backup.invoices.length} backed-up invoices?`)) {
+        restoreInput.value = "";
+        return;
+      }
+      const restoredIds = new Set();
+      invoices = backup.invoices.map(invoice => {
+        let id = typeof invoice.id === "string" && invoice.id && !restoredIds.has(invoice.id)
+          ? invoice.id
+          : createInvoiceId();
+        while (restoredIds.has(id)) id = createInvoiceId();
+        restoredIds.add(id);
+        return {
+          ...invoice,
+          id,
+          items: invoice.items || [],
+          status: validStatuses.includes(invoice.status) ? invoice.status : "draft"
+        };
+      });
+      saveInvoices();
+      restoreInput.value = "";
+      updateDashboard();
+      window.alert("Backup restored.");
+    } catch (error) {
+      restoreInput.value = "";
+      window.alert(error.message);
+    }
+  });
 
   searchBox.addEventListener("input", updateDashboard);
   sortSelect.addEventListener("change", updateDashboard);
