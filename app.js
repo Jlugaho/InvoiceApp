@@ -2,9 +2,15 @@ window.InvoiceAuth.onAuthenticated(() => {
   const tableBody = document.getElementById("invoiceTable");
   const totalInvoices = document.getElementById("totalInvoices");
   const totalRevenue = document.getElementById("totalRevenue");
+  const paidRevenue = document.getElementById("paidRevenue");
+  const paidCaption = document.getElementById("paidCaption");
+  const outstandingRevenue = document.getElementById("outstandingRevenue");
+  const outstandingCaption = document.getElementById("outstandingCaption");
+  const invoiceCountCaption = document.getElementById("invoiceCountCaption");
   const topBusinessType = document.getElementById("topBusinessType");
   const searchBox = document.getElementById("searchBox");
   const sortSelect = document.getElementById("sortSelect");
+  const statusFilter = document.getElementById("statusFilter");
   const backupButton = document.getElementById("backupInvoicesBtn");
   const restoreInput = document.getElementById("restoreInvoicesInput");
   const importButton = document.getElementById("importLocalInvoicesBtn");
@@ -15,8 +21,19 @@ window.InvoiceAuth.onAuthenticated(() => {
 
   function renderStats(data) {
     totalInvoices.textContent = data.length;
-    const revenue = data.reduce((sum, inv) => sum + parseFloat(inv.total), 0);
+    invoiceCountCaption.textContent = data.length === invoices.length
+      ? "In this workspace"
+      : `${data.length} shown after filters`;
+    const revenue = data.reduce((sum, inv) => sum + Number(inv.total), 0);
     totalRevenue.textContent = `$${revenue.toFixed(2)}`;
+    const paid = data.filter(invoice => invoice.status === "paid");
+    const unpaid = data.filter(invoice => invoice.status !== "paid");
+    paidRevenue.textContent = `$${paid.reduce((sum, inv) => sum + Number(inv.total), 0).toFixed(2)}`;
+    paidCaption.textContent = `${paid.length} ${paid.length === 1 ? "invoice" : "invoices"} paid`;
+    outstandingRevenue.textContent = `$${unpaid.reduce((sum, inv) => sum + Number(inv.total), 0).toFixed(2)}`;
+    outstandingCaption.textContent = unpaid.length
+      ? `${unpaid.length} ${unpaid.length === 1 ? "invoice" : "invoices"} still to come`
+      : "Nothing waiting right now";
 
     if (data.length > 0) {
       const counts = data.reduce((acc, inv) => {
@@ -24,22 +41,39 @@ window.InvoiceAuth.onAuthenticated(() => {
         return acc;
       }, {});
       const topType = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
-      topBusinessType.textContent = topType.charAt(0).toUpperCase() + topType.slice(1);
+      topBusinessType.textContent = `Most common: ${topType} · ${counts[topType]} ${counts[topType] === 1 ? "invoice" : "invoices"}`;
     } else {
-      topBusinessType.textContent = "N/A";
+      topBusinessType.textContent = "No invoices yet";
     }
   }
 
-  function createCell(value, className) {
+  function createCell(value, className = "") {
     const cell = document.createElement("td");
     cell.className = className;
     cell.textContent = value;
     return cell;
   }
 
+  function createTextElement(tagName, value, className = "") {
+    const element = document.createElement(tagName);
+    element.className = className;
+    element.textContent = value;
+    return element;
+  }
+
+  function formatDate(value) {
+    const isoDate = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    const date = isoDate
+      ? new Date(Number(isoDate[1]), Number(isoDate[2]) - 1, Number(isoDate[3]))
+      : new Date(value);
+    return Number.isNaN(date.getTime())
+      ? value
+      : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(date);
+  }
+
   function createStatusSelect(invoice) {
     const select = document.createElement("select");
-    select.className = "px-2 py-1 border rounded";
+    select.className = `status-select status-${invoice.status}`;
     select.setAttribute("aria-label", `Status for ${invoice.customer}`);
     validStatuses.forEach(status => {
       const option = document.createElement("option");
@@ -49,6 +83,9 @@ window.InvoiceAuth.onAuthenticated(() => {
       select.appendChild(option);
     });
     select.value = invoice.status;
+    select.addEventListener("change", () => {
+      select.className = `status-select status-${select.value}`;
+    });
     select.addEventListener("change", async () => {
       invoice.status = select.value;
       try {
@@ -67,7 +104,10 @@ window.InvoiceAuth.onAuthenticated(() => {
 
   function getVisibleInvoices() {
     const term = searchBox.value.trim().toLowerCase();
-    const visible = invoices.filter(inv => String(inv.customer || "").toLowerCase().includes(term));
+    const visible = invoices.filter(inv =>
+      `${inv.customer || ""} ${inv.type || ""}`.toLowerCase().includes(term) &&
+      (!statusFilter.value || inv.status === statusFilter.value)
+    );
 
     switch (sortSelect.value) {
       case "dateAsc":
@@ -88,21 +128,45 @@ window.InvoiceAuth.onAuthenticated(() => {
 
   function renderInvoices(data) {
     tableBody.replaceChildren();
-    data.forEach((inv, index) => {
+    if (data.length === 0) {
       const row = document.createElement("tr");
-      row.appendChild(createCell(index + 1, "px-4 py-2"));
-      row.appendChild(createCell(inv.customer, "px-4 py-2"));
-      row.appendChild(createCell(inv.type, "px-4 py-2"));
-      row.appendChild(createCell(`$${parseFloat(inv.total).toFixed(2)}`, "px-4 py-2"));
-      row.appendChild(createCell(inv.date, "px-4 py-2"));
+      const cell = createCell(
+        invoices.length === 0
+          ? "Your first invoice is a few details away. Create one to get started."
+          : "No invoices match these filters. Try another search or status.",
+        "empty-row"
+      );
+      cell.colSpan = 6;
+      row.appendChild(cell);
+      tableBody.appendChild(row);
+      return;
+    }
+
+    data.forEach(inv => {
+      const row = document.createElement("tr");
+      const customerCell = document.createElement("td");
+      const customerWrap = document.createElement("div");
+      customerWrap.className = "customer-cell";
+      const initials = String(inv.customer || "?").trim().split(/\s+/).slice(0, 2).map(part => part[0] || "").join("");
+      const avatar = createTextElement("span", initials, "customer-avatar");
+      avatar.setAttribute("aria-hidden", "true");
+      const customerDetails = document.createElement("div");
+      const customerName = createTextElement("span", inv.customer, "customer-primary");
+      const customerMeta = createTextElement("span", inv.id ? `Invoice · ${inv.id.slice(0, 8)}` : "Invoice", "customer-subtitle");
+      customerDetails.append(customerName, customerMeta);
+      customerWrap.append(avatar, customerDetails);
+      customerCell.appendChild(customerWrap);
+      row.appendChild(customerCell);
+      row.appendChild(createCell(inv.type, "business-cell"));
+      row.appendChild(createCell(formatDate(inv.date)));
+      row.appendChild(createCell(`$${Number(inv.total).toFixed(2)}`));
 
       const statusCell = document.createElement("td");
-      statusCell.className = "px-4 py-2";
       statusCell.appendChild(createStatusSelect(inv));
       row.appendChild(statusCell);
 
       const actions = document.createElement("td");
-      actions.className = "px-4 py-2 space-x-2";
+      actions.className = "row-actions";
 
       const editLink = document.createElement("a");
       editLink.className = "edit-btn px-2 py-1 bg-blue-500 text-white rounded";
@@ -110,7 +174,7 @@ window.InvoiceAuth.onAuthenticated(() => {
       editLink.textContent = "Edit";
 
       const exportButton = document.createElement("button");
-      exportButton.className = "export-btn px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600";
+      exportButton.className = "export-btn";
       exportButton.textContent = "Export";
       exportButton.addEventListener("click", () => {
         const { jsPDF } = window.jspdf;
@@ -128,9 +192,10 @@ Items: ${inv.items ? inv.items.map(i => `${i.name} x${i.qty} $${i.price}`).join(
       });
 
       const deleteButton = document.createElement("button");
-      deleteButton.className = "delete-btn px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600";
+      deleteButton.className = "delete-btn";
       deleteButton.textContent = "Delete";
       deleteButton.addEventListener("click", async () => {
+        if (!window.confirm(`Delete the invoice for ${inv.customer}? This cannot be undone.`)) return;
         try {
           await window.InvoiceAuth.request(`/api/invoices/${encodeURIComponent(inv.id)}`, {
             method: "DELETE"
@@ -214,6 +279,7 @@ Items: ${inv.items ? inv.items.map(i => `${i.name} x${i.qty} $${i.price}`).join(
 
   searchBox.addEventListener("input", updateDashboard);
   sortSelect.addEventListener("change", updateDashboard);
+  statusFilter.addEventListener("change", updateDashboard);
 
   async function loadInvoices() {
     try {

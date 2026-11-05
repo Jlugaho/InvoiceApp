@@ -100,6 +100,7 @@ function createDocument(ids) {
 function runDashboard(invoices) {
   const document = createDocument([
     'invoiceTable', 'totalInvoices', 'totalRevenue', 'topBusinessType', 'searchBox', 'sortSelect',
+    'paidRevenue', 'paidCaption', 'outstandingRevenue', 'outstandingCaption', 'invoiceCountCaption', 'statusFilter',
     'backupInvoicesBtn', 'restoreInvoicesInput', 'importLocalInvoicesBtn', 'dashboardError'
   ]);
   const saved = new Map([['invoices', JSON.stringify(invoices)]]);
@@ -246,11 +247,11 @@ test('dashboard delete and export actions keep targeting their invoice after sea
 
   const rows = document.elements.invoiceTable.children;
   assert.equal(rows.length, 2);
-  await rows[1].children[6].children[1].trigger('click');
+  await rows[1].children[5].children[1].trigger('click');
   assert.match(exported[0].content, /Invoice for: Alexandra/);
   assert.equal(exported[0].filename, 'Alexandra_Invoice.pdf');
 
-  await rows[0].children[6].children[2].trigger('click');
+  await rows[0].children[5].children[2].trigger('click');
   assert.deepEqual(JSON.parse(saved.get('invoices')).map(invoice => invoice.customer), ['Sam', 'Alexandra']);
   assert.equal(document.elements.invoiceTable.children.length, 1);
 });
@@ -262,9 +263,9 @@ test('dashboard renders customer and business text without interpreting it as ma
   ]);
   await ready;
   const row = document.elements.invoiceTable.children[0];
-  assert.equal(row.children[1].textContent, maliciousText);
-  assert.equal(row.children[2].textContent, '<b>Shop</b>');
-  assert.equal(row.children[1].children.length, 0);
+  assert.equal(row.children[0].children[0].children[1].children[0].textContent, maliciousText);
+  assert.equal(row.children[1].textContent, '<b>Shop</b>');
+  assert.equal(row.children[0].children.length, 1);
 });
 
 test('removing an invoice item keeps remaining input handlers attached to the right item', () => {
@@ -380,9 +381,9 @@ test('dashboard persists invoice status changes and exports a versioned backup',
   const { document, saved, downloaded, ready } = runDashboard([invoice]);
   await ready;
   const row = document.elements.invoiceTable.children[0];
-  assert.equal(row.children[5].children[0].value, 'draft');
-  row.children[5].children[0].value = 'paid';
-  await row.children[5].children[0].trigger('change');
+  assert.equal(row.children[4].children[0].value, 'draft');
+  row.children[4].children[0].value = 'paid';
+  await row.children[4].children[0].trigger('change');
   assert.equal(JSON.parse(saved.get('invoices'))[0].status, 'paid');
 
   document.elements.backupInvoicesBtn.trigger('click');
@@ -390,6 +391,27 @@ test('dashboard persists invoice status changes and exports a versioned backup',
   assert.equal(backup.format, 'invoiceapp-backup');
   assert.equal(backup.version, 1);
   assert.equal(backup.invoices[0].status, 'paid');
+});
+
+test('dashboard filters customer, business, and status while updating summary totals', async () => {
+  const { document, ready } = runDashboard([
+    { customer: 'Taylor', type: 'Consulting', total: 40, date: '2025-01-02', status: 'paid' },
+    { customer: 'Morgan', type: 'Consulting', total: 30, date: '2025-01-03', status: 'sent' },
+    { customer: 'Taylor', type: 'Repairs', total: 20, date: '2025-01-04', status: 'draft' }
+  ]);
+  await ready;
+  document.elements.searchBox.value = 'consulting';
+  document.elements.searchBox.trigger('input');
+  document.elements.statusFilter.value = 'paid';
+  document.elements.statusFilter.trigger('change');
+
+  assert.equal(document.elements.invoiceTable.children.length, 1);
+  assert.equal(document.elements.invoiceTable.children[0].children[0].textContent.includes('Taylor'), true);
+  assert.equal(document.elements.totalInvoices.textContent, '1');
+  assert.equal(document.elements.totalRevenue.textContent, '$40.00');
+  assert.equal(document.elements.paidRevenue.textContent, '$40.00');
+  assert.equal(document.elements.outstandingRevenue.textContent, '$0.00');
+  assert.equal(document.elements.invoiceCountCaption.textContent, '1 shown after filters');
 });
 
 test('restoring a versioned backup replaces saved invoices and preserves its data', async () => {

@@ -4,13 +4,26 @@
   "private": true,
   "description": "InvoiceApp with a local SQLite API",
   "engines": {
-    "node": ">=20"
+    "node": ">=20.19.0"
   },
   "dependencies": {
-    "better-sqlite3": "^12.2.0"
+    "better-sqlite3": "^12.2.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
+    "lucide-react": "^1.69.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "recharts": "^3.10.1"
   },
   "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
     "start": "node server.js",
     "test": "node --test"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.4",
+    "tailwindcss": "^4.3.4",
+    "vite": "^8.3.6"
   }
 }

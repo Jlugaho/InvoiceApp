@@ -3,95 +3,141 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>InvoiceApp Dashboard</title>
+  <meta name="theme-color" content="#f5f6f3" />
+  <title>Invoices | InvoiceApp</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="styles.css" />
-  <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/4679/4679712.png" />
 </head>
-<body class="bg-gray-100 min-h-screen flex">
+<body class="app-body dashboard-body">
+  <header class="app-header">
+    <div class="header-inner">
+      <a class="brand" href="index.html" aria-label="InvoiceApp home">
+        <span class="brand-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M7 3.75h7l4 4v12.5H7a2 2 0 0 1-2-2v-12.5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M14 4v4h4M8.5 12h6.5M8.5 15.5h6.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </span>
+        <span>invoice<span class="brand-light">app</span></span>
+      </a>
+      <div class="protected-content header-actions" hidden>
+        <a class="header-link active" href="dashboard.html">Invoices</a>
+        <a class="primary-button compact-button" href="index.html">New invoice <span aria-hidden="true">+</span></a>
+        <span class="header-divider" aria-hidden="true"></span>
+        <button id="signOutBtn" class="header-link header-signout" type="button">Sign out</button>
+      </div>
+    </div>
+  </header>
 
-  <section id="authGate" class="fixed inset-0 z-50 m-auto h-fit w-full max-w-md bg-white rounded-lg shadow p-6" hidden>
-    <h2 class="text-xl font-semibold mb-2">Connect to your invoice server</h2>
-    <p class="text-sm text-gray-600 mb-4">Enter the access key configured by your server administrator. It is kept in this browser tab only.</p>
-    <form id="authForm" class="flex flex-col gap-3">
-      <label for="apiKey" class="font-medium">Server access key</label>
-      <input id="apiKey" type="password" autocomplete="current-password" required class="px-3 py-2 border rounded" />
-      <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded">Connect</button>
-    </form>
-    <p id="authError" class="mt-3 text-sm text-red-600" role="alert"></p>
+  <section id="authGate" class="auth-layout dashboard-auth" hidden>
+    <div class="auth-story">
+      <div class="story-topline"><span class="story-dot"></span> YOUR BUSINESS, IN GOOD ORDER</div>
+      <div class="story-copy">
+        <span class="eyebrow">A calmer way to get paid</span>
+        <h1>Good work deserves a good invoice.</h1>
+        <p>Create clear, professional invoices and keep every payment in view. No paperwork pile required.</p>
+        <div class="story-note"><span class="note-check" aria-hidden="true">✓</span><span>Simple invoices. A little more peace of mind.</span></div>
+      </div>
+      <div class="story-bottom"><span>MADE FOR THE PEOPLE WHO MAKE THINGS HAPPEN</span><span>01 — 03</span></div>
+    </div>
+    <div class="auth-panel-wrap">
+      <div class="auth-panel">
+        <span class="auth-mark" aria-hidden="true">↗</span>
+        <span class="eyebrow">WELCOME TO INVOICEAPP</span>
+        <h2>Let’s get you connected.</h2>
+        <p class="auth-description">Enter your workspace access key to open your invoices.</p>
+        <form id="authForm" class="auth-form">
+          <label for="apiKey">Workspace access key</label>
+          <input id="apiKey" type="password" autocomplete="current-password" placeholder="Enter your access key" required />
+          <button type="submit" class="primary-button auth-submit">Open my workspace <span aria-hidden="true">→</span></button>
+        </form>
+        <p id="authError" class="auth-error" role="alert"></p>
+        <div class="privacy-note"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.6"/></svg><span>Your key stays in this browser tab. Your invoices stay on your server.</span></div>
+      </div>
+    </div>
   </section>
 
-  <!-- Sidebar -->
-  <aside class="protected-content w-64 bg-indigo-700 text-white flex flex-col p-6" hidden>
-    <h1 class="text-2xl font-bold mb-8">InvoiceApp</h1>
-    <nav class="flex flex-col space-y-3">
-      <a href="index.html" class="hover:bg-indigo-600 px-3 py-2 rounded">➕ New Invoice</a>
-      <a href="#" class="bg-indigo-900 px-3 py-2 rounded font-semibold">📊 Dashboard</a>
-      <button id="signOutBtn" class="mt-auto hover:bg-indigo-600 px-3 py-2 rounded text-left">Sign out</button>
-    </nav>
-  </aside>
-
-  <!-- Main content -->
-  <main class="protected-content flex-1 p-6" hidden>
-    <!-- Stats cards -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-      <div class="bg-white rounded-lg p-6 shadow hover:shadow-lg transition">
-        <h2 class="text-sm font-medium text-gray-500">Total Invoices</h2>
-        <p id="totalInvoices" class="mt-2 text-2xl font-bold">0</p>
+  <main class="protected-content dashboard-page" hidden>
+    <section class="dashboard-heading">
+      <div>
+        <div class="breadcrumbs"><span>Workspace</span><span>/</span><span>Invoices</span></div>
+        <h1>Your invoices</h1>
+        <p>A clear view of what you’ve billed and what’s still on its way.</p>
       </div>
-      <div class="bg-white rounded-lg p-6 shadow hover:shadow-lg transition">
-        <h2 class="text-sm font-medium text-gray-500">Total Revenue</h2>
-        <p id="totalRevenue" class="mt-2 text-2xl font-bold">$0.00</p>
-      </div>
-      <div class="bg-white rounded-lg p-6 shadow hover:shadow-lg transition">
-        <h2 class="text-sm font-medium text-gray-500">Top Business Type</h2>
-        <p id="topBusinessType" class="mt-2 text-2xl font-bold">N/A</p>
-      </div>
-    </div>
+      <a class="primary-button new-invoice-button" href="index.html"><span aria-hidden="true">+</span> Create invoice</a>
+    </section>
 
-    <!-- Filters -->
-    <div class="flex flex-col md:flex-row justify-between mb-4 gap-2">
-      <input id="searchBox" type="text" placeholder="🔍 Search by customer" 
-             class="w-full md:w-1/3 px-4 py-2 rounded shadow focus:outline-none focus:ring-2 focus:ring-indigo-400">
-      <select id="sortSelect" class="w-full md:w-1/4 px-4 py-2 rounded shadow focus:outline-none focus:ring-2 focus:ring-indigo-400">
-        <option value="">Sort by</option>
-        <option value="dateAsc">Date ↑</option>
-        <option value="dateDesc">Date ↓</option>
-        <option value="totalAsc">Total ↑</option>
-        <option value="totalDesc">Total ↓</option>
-      </select>
-    </div>
-    <div class="flex flex-wrap gap-2 mb-4">
-      <button id="backupInvoicesBtn" class="px-4 py-2 bg-indigo-600 text-white rounded">Download backup</button>
-      <label class="px-4 py-2 bg-gray-200 rounded cursor-pointer">
-        Restore backup
-        <input id="restoreInvoicesInput" type="file" accept="application/json,.json" class="sr-only">
-      </label>
-      <button id="importLocalInvoicesBtn" class="px-4 py-2 bg-gray-700 text-white rounded" hidden>Import invoices from this browser</button>
-      <p class="w-full text-sm text-gray-600">Invoices are stored on your invoice server. Download a backup to keep a copy or move them to another server.</p>
-    </div>
-    <p id="dashboardError" class="mb-4 text-sm text-red-600" role="alert"></p>
+    <section class="metrics-grid" aria-label="Invoice summary">
+      <article class="metric-card">
+        <div class="metric-label"><span class="metric-icon icon-violet" aria-hidden="true">↗</span> TOTAL INVOICED</div>
+        <p id="totalRevenue" class="metric-value">$0.00</p>
+        <p class="metric-caption">Across all matching invoices</p>
+      </article>
+      <article class="metric-card">
+        <div class="metric-label"><span class="metric-icon icon-green" aria-hidden="true">✓</span> PAID</div>
+        <p id="paidRevenue" class="metric-value">$0.00</p>
+        <p id="paidCaption" class="metric-caption">0 invoices paid</p>
+      </article>
+      <article class="metric-card">
+        <div class="metric-label"><span class="metric-icon icon-amber" aria-hidden="true">◷</span> STILL TO COME</div>
+        <p id="outstandingRevenue" class="metric-value">$0.00</p>
+        <p id="outstandingCaption" class="metric-caption">Nothing waiting right now</p>
+      </article>
+      <article class="metric-card metric-count-card">
+        <div class="metric-label"><span class="metric-icon icon-slate" aria-hidden="true">▤</span> INVOICES</div>
+        <p id="totalInvoices" class="metric-value">0</p>
+        <p id="invoiceCountCaption" class="metric-caption">In this workspace</p>
+      </article>
+    </section>
 
-    <!-- Invoice Table -->
-    <div class="bg-white rounded-lg shadow overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
-          <tr>
-            <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">#</th>
-            <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Customer</th>
-            <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Business Type</th>
-            <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Total ($)</th>
-            <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Date</th>
-            <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Status</th>
-            <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="invoiceTable" class="divide-y divide-gray-200 bg-white"></tbody>
-      </table>
-    </div>
+    <section class="invoice-list-card">
+      <div class="list-heading">
+        <div><h2>Recent invoices</h2><p>Keep an eye on the details and update a payment status as things come in.</p></div>
+        <div class="list-tools">
+          <label class="search-control"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8" stroke="currentColor" stroke-width="1.7"/><path d="m16 16 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span class="sr-only">Search invoices</span><input id="searchBox" type="search" placeholder="Search customer or business" /></label>
+          <select id="sortSelect" aria-label="Sort invoices">
+            <option value="">Newest first</option>
+            <option value="dateAsc">Oldest first</option>
+            <option value="dateDesc">Newest date</option>
+            <option value="totalAsc">Amount: low to high</option>
+            <option value="totalDesc">Amount: high to low</option>
+          </select>
+          <select id="statusFilter" aria-label="Filter by payment status">
+            <option value="">All statuses</option>
+            <option value="draft">Draft</option>
+            <option value="sent">Sent</option>
+            <option value="paid">Paid</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="data-tools">
+        <span id="topBusinessType" class="business-summary">No invoices yet</span>
+        <div class="backup-tools">
+          <button id="backupInvoicesBtn" class="text-button" type="button">Download backup</button>
+          <label class="text-button file-button">Restore backup<input id="restoreInvoicesInput" type="file" accept="application/json,.json" class="sr-only"></label>
+          <button id="importLocalInvoicesBtn" class="text-button" type="button" hidden>Import browser invoices</button>
+        </div>
+      </div>
+      <p class="backup-note">Invoices are stored securely on your server.</p>
+      <p id="dashboardError" class="dashboard-message" role="status" aria-live="polite"></p>
+
+      <div class="table-wrap">
+        <table class="invoice-table">
+          <thead>
+            <tr>
+              <th scope="col">CUSTOMER</th>
+              <th scope="col">BUSINESS / SERVICE</th>
+              <th scope="col">ISSUED</th>
+              <th scope="col">AMOUNT</th>
+              <th scope="col">STATUS</th>
+              <th scope="col"><span class="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody id="invoiceTable"></tbody>
+        </table>
+      </div>
+    </section>
+    <footer class="workspace-footer"><span>InvoiceApp</span><span>Good work, well accounted for.</span><a href="index.html">Create an invoice →</a></footer>
   </main>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="auth.js"></script>
   <script src="app.js"></script>

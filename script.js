@@ -26,12 +26,10 @@ businessTypeInput.addEventListener('input', updatePreview);
 
 // ==== Dark Mode Toggle ====
 themeToggle.addEventListener('click', () => {
-  document.body.classList.toggle('dark');
-  document.body.classList.toggle('bg-gray-900');
-  document.body.classList.toggle('text-white');
-  themeToggle.classList.toggle('bg-indigo-600');
-  themeToggle.classList.toggle('bg-gray-800');
+  const isDark = document.body.classList.toggle('dark-mode');
+  localStorage.setItem('invoiceapp-theme', isDark ? 'dark' : 'light');
 });
+if (localStorage.getItem('invoiceapp-theme') === 'dark') document.body.classList.add('dark-mode');
 
 // ==== Add Item Functionality ====
 addItemBtn.addEventListener('click', () => {
@@ -40,7 +38,7 @@ addItemBtn.addEventListener('click', () => {
 
 function addItemRow(item) {
   const div = document.createElement('div');
-  div.classList.add('flex', 'gap-2', 'mb-2', 'items-center');
+  div.className = 'invoice-item-row';
   const nameInput = createInput('text', 'Item Name', 'flex-1 px-2 py-1 border rounded');
   const quantityInput = createInput('number', 'Qty', 'w-16 px-2 py-1 border rounded');
   const priceInput = createInput('number', 'Price', 'w-24 px-2 py-1 border rounded');
@@ -56,6 +54,8 @@ function addItemRow(item) {
   priceInput.value = item.price ?? '';
   const removeButton = document.createElement('button');
   removeButton.className = 'remove-item px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600';
+  removeButton.type = 'button';
+  removeButton.setAttribute('aria-label', `Remove ${item.name || 'invoice'} line item`);
   removeButton.textContent = '✕';
   div.append(nameInput, quantityInput, priceInput, removeButton);
   itemsContainer.appendChild(div);
@@ -120,7 +120,7 @@ function updateTotals() {
 function updatePreview() {
   const customer = customerNameInput.value || 'Anonymous';
   const business = businessTypeInput.value || 'General';
-  const invoiceDate = new Date().toLocaleDateString();
+  const invoiceDate = editingInvoiceDate || new Date().toISOString().slice(0, 10);
   previewContent.replaceChildren();
 
   if (invoiceItemsArray.length === 0) {
