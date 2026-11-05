@@ -8,7 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let invoices = JSON.parse(localStorage.getItem("invoices")) || [];
 
-  function renderStats(data = invoices) {
+  function renderStats(data) {
     totalInvoices.textContent = data.length;
     const revenue = data.reduce((sum, inv) => sum + parseFloat(inv.total), 0);
     totalRevenue.textContent = `$${revenue.toFixed(2)}`;
@@ -25,41 +25,52 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function renderInvoices(data = invoices) {
-    tableBody.innerHTML = "";
+  function createCell(value, className) {
+    const cell = document.createElement("td");
+    cell.className = className;
+    cell.textContent = value;
+    return cell;
+  }
+
+  function getVisibleInvoices() {
+    const term = searchBox.value.trim().toLowerCase();
+    const visible = invoices.filter(inv => String(inv.customer || "").toLowerCase().includes(term));
+
+    switch (sortSelect.value) {
+      case "dateAsc":
+        visible.sort((a, b) => new Date(a.date) - new Date(b.date));
+        break;
+      case "dateDesc":
+        visible.sort((a, b) => new Date(b.date) - new Date(a.date));
+        break;
+      case "totalAsc":
+        visible.sort((a, b) => Number(a.total) - Number(b.total));
+        break;
+      case "totalDesc":
+        visible.sort((a, b) => Number(b.total) - Number(a.total));
+        break;
+    }
+    return visible;
+  }
+
+  function renderInvoices(data) {
+    tableBody.replaceChildren();
     data.forEach((inv, index) => {
       const row = document.createElement("tr");
-      row.innerHTML = `
-        <td class="px-4 py-2">${index + 1}</td>
-        <td class="px-4 py-2">${inv.customer}</td>
-        <td class="px-4 py-2">${inv.type}</td>
-        <td class="px-4 py-2">$${parseFloat(inv.total).toFixed(2)}</td>
-        <td class="px-4 py-2">${inv.date}</td>
-        <td class="px-4 py-2 space-x-2">
-          <button class="export-btn px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600" data-index="${index}">Export</button>
-          <button class="delete-btn px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600" data-index="${index}">Delete</button>
-        </td>
-      `;
-      tableBody.appendChild(row);
-    });
+      row.appendChild(createCell(index + 1, "px-4 py-2"));
+      row.appendChild(createCell(inv.customer, "px-4 py-2"));
+      row.appendChild(createCell(inv.type, "px-4 py-2"));
+      row.appendChild(createCell(`$${parseFloat(inv.total).toFixed(2)}`, "px-4 py-2"));
+      row.appendChild(createCell(inv.date, "px-4 py-2"));
 
-    // Attach event listeners for buttons
-    document.querySelectorAll(".delete-btn").forEach(btn => {
-      btn.addEventListener("click", e => {
-        const idx = e.target.dataset.index;
-        invoices.splice(idx, 1);
-        localStorage.setItem("invoices", JSON.stringify(invoices));
-        renderInvoices();
-        renderStats();
-      });
-    });
+      const actions = document.createElement("td");
+      actions.className = "px-4 py-2 space-x-2";
 
-    document.querySelectorAll(".export-btn").forEach(btn => {
-      btn.addEventListener("click", async e => {
-        const idx = e.target.dataset.index;
-        const inv = invoices[idx];
+      const exportButton = document.createElement("button");
+      exportButton.className = "export-btn px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600";
+      exportButton.textContent = "Export";
+      exportButton.addEventListener("click", () => {
         const { jsPDF } = window.jspdf;
-
         const pdf = new jsPDF("p", "pt", "a4");
         const content = `
 Invoice for: ${inv.customer}
@@ -71,34 +82,32 @@ Items: ${inv.items ? inv.items.map(i => `${i.name} x${i.qty} $${i.price}`).join(
         pdf.text(content, 40, 50);
         pdf.save(`${inv.customer}_Invoice.pdf`);
       });
+
+      const deleteButton = document.createElement("button");
+      deleteButton.className = "delete-btn px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600";
+      deleteButton.textContent = "Delete";
+      deleteButton.addEventListener("click", () => {
+        const invoiceIndex = invoices.indexOf(inv);
+        if (invoiceIndex === -1) return;
+        invoices.splice(invoiceIndex, 1);
+        localStorage.setItem("invoices", JSON.stringify(invoices));
+        updateDashboard();
+      });
+
+      actions.append(exportButton, deleteButton);
+      row.appendChild(actions);
+      tableBody.appendChild(row);
     });
   }
 
-  // Search
-  searchBox.addEventListener("input", e => {
-    const term = e.target.value.toLowerCase();
-    const filtered = invoices.filter(inv => inv.customer.toLowerCase().includes(term));
-    renderInvoices(filtered);
-    renderStats(filtered);
-  });
+  function updateDashboard() {
+    const visible = getVisibleInvoices();
+    renderInvoices(visible);
+    renderStats(visible);
+  }
 
-  // Sort
-  sortSelect.addEventListener("change", e => {
-    let sorted = [...invoices];
-    switch (e.target.value) {
-      case "dateAsc":
-        sorted.sort((a, b) => new Date(a.date) - new Date(b.date)); break;
-      case "dateDesc":
-        sorted.sort((a, b) => new Date(b.date) - new Date(a.date)); break;
-      case "totalAsc":
-        sorted.sort((a, b) => a.total - b.total); break;
-      case "totalDesc":
-        sorted.sort((a, b) => b.total - a.total); break;
-    }
-    renderInvoices(sorted);
-    renderStats(sorted);
-  });
+  searchBox.addEventListener("input", updateDashboard);
+  sortSelect.addEventListener("change", updateDashboard);
 
-  renderInvoices();
-  renderStats();
+  updateDashboard();
 });

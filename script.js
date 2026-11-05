@@ -16,6 +16,9 @@ let invoiceItemsArray = [];
 const TAX_RATE = 0.085;
 let discount = 0;
 
+customerNameInput.addEventListener('input', updatePreview);
+businessTypeInput.addEventListener('input', updatePreview);
+
 // ==== Dark Mode Toggle ====
 themeToggle.addEventListener('click', () => {
   document.body.classList.toggle('dark');
@@ -27,36 +30,38 @@ themeToggle.addEventListener('click', () => {
 
 // ==== Add Item Functionality ====
 addItemBtn.addEventListener('click', () => {
-  const itemIndex = invoiceItemsArray.length;
+  const item = { name: '', qty: 0, price: 0 };
   const div = document.createElement('div');
   div.classList.add('flex', 'gap-2', 'mb-2', 'items-center');
-  div.innerHTML = `
-    <input type="text" placeholder="Item Name" class="flex-1 px-2 py-1 border rounded" />
-    <input type="number" placeholder="Qty" class="w-16 px-2 py-1 border rounded" />
-    <input type="number" placeholder="Price" class="w-24 px-2 py-1 border rounded" />
-    <button class="remove-item px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600">✕</button>
-  `;
+  const nameInput = createInput('text', 'Item Name', 'flex-1 px-2 py-1 border rounded');
+  const quantityInput = createInput('number', 'Qty', 'w-16 px-2 py-1 border rounded');
+  const priceInput = createInput('number', 'Price', 'w-24 px-2 py-1 border rounded');
+  const removeButton = document.createElement('button');
+  removeButton.className = 'remove-item px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600';
+  removeButton.textContent = '✕';
+  div.append(nameInput, quantityInput, priceInput, removeButton);
   itemsContainer.appendChild(div);
 
-  invoiceItemsArray.push({ name: '', qty: 0, price: 0 });
+  invoiceItemsArray.push(item);
 
-  const inputs = div.querySelectorAll('input');
-  inputs[0].addEventListener('input', e => { 
-    invoiceItemsArray[itemIndex].name = e.target.value; 
+  nameInput.addEventListener('input', e => {
+    item.name = e.target.value;
     updatePreview();
   });
-  inputs[1].addEventListener('input', e => { 
-    invoiceItemsArray[itemIndex].qty = parseFloat(e.target.value) || 0; 
+  quantityInput.addEventListener('input', e => {
+    item.qty = parseFloat(e.target.value) || 0;
     updateTotals();
     updatePreview();
   });
-  inputs[2].addEventListener('input', e => { 
-    invoiceItemsArray[itemIndex].price = parseFloat(e.target.value) || 0; 
+  priceInput.addEventListener('input', e => {
+    item.price = parseFloat(e.target.value) || 0;
     updateTotals();
     updatePreview();
   });
 
-  div.querySelector('.remove-item').addEventListener('click', () => {
+  removeButton.addEventListener('click', () => {
+    const itemIndex = invoiceItemsArray.indexOf(item);
+    if (itemIndex === -1) return;
     invoiceItemsArray.splice(itemIndex, 1);
     div.remove();
     updateTotals();
@@ -66,6 +71,14 @@ addItemBtn.addEventListener('click', () => {
   updateTotals();
   updatePreview();
 });
+
+function createInput(type, placeholder, className) {
+  const input = document.createElement('input');
+  input.type = type;
+  input.placeholder = placeholder;
+  input.className = className;
+  return input;
+}
 
 // ==== Update Totals ====
 function updateTotals() {
@@ -84,60 +97,70 @@ function updatePreview() {
   const customer = customerNameInput.value || 'Anonymous';
   const business = businessTypeInput.value || 'General';
   const invoiceDate = new Date().toLocaleDateString();
+  previewContent.replaceChildren();
 
   if (invoiceItemsArray.length === 0) {
-    previewContent.innerHTML = '<p class="text-gray-400 italic">Your items and totals will appear here.</p>';
+    previewContent.appendChild(createElement('p', 'text-gray-400 italic', 'Your items and totals will appear here.'));
     return;
   }
 
-  let html = `
-    <div class="mb-2">
-      <div class="flex justify-between">
-        <h3 class="text-lg font-semibold">${business}</h3>
-        <span class="text-sm text-gray-500">Date: ${invoiceDate}</span>
-      </div>
-      <p class="text-sm text-gray-700">Customer: ${customer}</p>
-    </div>
-    <table class="w-full text-sm border-collapse">
-      <thead>
-        <tr class="bg-gray-200">
-          <th class="border px-2 py-1 text-left">Item</th>
-          <th class="border px-2 py-1 text-left">Qty</th>
-          <th class="border px-2 py-1 text-left">Price</th>
-          <th class="border px-2 py-1 text-left">Total</th>
-        </tr>
-      </thead>
-      <tbody>
-  `;
+  const heading = createElement('div', 'mb-2');
+  const headingRow = createElement('div', 'flex justify-between');
+  headingRow.append(
+    createElement('h3', 'text-lg font-semibold', business),
+    createElement('span', 'text-sm text-gray-500', `Date: ${invoiceDate}`)
+  );
+  heading.append(
+    headingRow,
+    createElement('p', 'text-sm text-gray-700', `Customer: ${customer}`)
+  );
+  previewContent.appendChild(heading);
+
+  const table = createElement('table', 'w-full text-sm border-collapse');
+  const tableHead = document.createElement('thead');
+  const headerRow = createElement('tr', 'bg-gray-200');
+  ['Item', 'Qty', 'Price', 'Total'].forEach(label => {
+    headerRow.appendChild(createElement('th', 'border px-2 py-1 text-left', label));
+  });
+  tableHead.appendChild(headerRow);
+  const tableBody = document.createElement('tbody');
 
   invoiceItemsArray.forEach(i => {
     const itemTotal = (i.qty * i.price || 0).toFixed(2);
-    html += `
-      <tr>
-        <td class="border px-2 py-1">${i.name || '-'}</td>
-        <td class="border px-2 py-1">${i.qty || 0}</td>
-        <td class="border px-2 py-1">$${i.price || 0}</td>
-        <td class="border px-2 py-1">$${itemTotal}</td>
-      </tr>
-    `;
+    const row = document.createElement('tr');
+    row.append(
+      createElement('td', 'border px-2 py-1', i.name || '-'),
+      createElement('td', 'border px-2 py-1', i.qty || 0),
+      createElement('td', 'border px-2 py-1', `$${i.price || 0}`),
+      createElement('td', 'border px-2 py-1', `$${itemTotal}`)
+    );
+    tableBody.appendChild(row);
   });
+  table.append(tableHead, tableBody);
+  previewContent.appendChild(table);
 
   const subtotal = invoiceItemsArray.reduce((sum, i) => sum + (i.qty * i.price || 0), 0);
   const tax = subtotal * TAX_RATE;
   const total = subtotal + tax - discount;
+  const totals = createElement('div', 'mt-2 space-y-1 text-sm text-gray-700');
+  [
+    ['Subtotal:', `$${subtotal.toFixed(2)}`],
+    ['Tax (8.5%):', `$${tax.toFixed(2)}`],
+    ['Discount:', `$${discount.toFixed(2)}`],
+    ['Total:', `$${total.toFixed(2)}`]
+  ].forEach(([label, amount], index) => {
+    const row = createElement('div', `flex justify-between${index === 3 ? ' font-semibold text-indigo-600' : ''}`);
+    row.append(createElement('span', '', label), createElement('span', '', amount));
+    totals.appendChild(row);
+  });
+  previewContent.appendChild(totals);
+}
 
-  html += `
-      </tbody>
-    </table>
-    <div class="mt-2 space-y-1 text-sm text-gray-700">
-      <div class="flex justify-between"><span>Subtotal:</span> <span>$${subtotal.toFixed(2)}</span></div>
-      <div class="flex justify-between"><span>Tax (8.5%):</span> <span>$${tax.toFixed(2)}</span></div>
-      <div class="flex justify-between"><span>Discount:</span> <span>$${discount.toFixed(2)}</span></div>
-      <div class="flex justify-between font-semibold text-indigo-600"><span>Total:</span> <span>$${total.toFixed(2)}</span></div>
-    </div>
-  `;
-
-  previewContent.innerHTML = html;
+function createElement(tag, className, text) {
+  const element = document.createElement(tag);
+  element.className = className;
+  element.textContent = text;
+  return element;
 }
 
 // ==== Save Invoice ====
