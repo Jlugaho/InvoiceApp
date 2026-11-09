@@ -1,6 +1,7 @@
 import React from "react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { getGreeting } from "./format.js";
 import {
   Activity, ArrowDownLeft, ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, BadgeDollarSign,
   Banknote, Bell, BriefcaseBusiness, CalendarDays, Check, CheckCheck, ChevronDown, ChevronLeft,
@@ -372,6 +373,11 @@ function EmptyState({ icon: Icon = FileText, title, message, action }) {
 }
 
 function DashboardPage({ data, onNewInvoice, onEditInvoice, onAddRecord, onDownload, dateRange, onLoadSample, sampleLoading }) {
+  const [greeting, setGreeting] = useState(getGreeting);
+  useEffect(() => {
+    const timer = setInterval(() => setGreeting(getGreeting()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
   const today = new Date();
   const cutoff = dateRange === "all" ? 0 : new Date(today.getTime() - Number(dateRange) * 86400000).getTime();
   const rangeInvoices = data.invoices.filter(invoice => !cutoff || new Date(`${invoice.date}T00:00:00`).getTime() >= cutoff);
@@ -398,7 +404,7 @@ function DashboardPage({ data, onNewInvoice, onEditInvoice, onAddRecord, onDownl
   const activity = [...data.payments].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 4);
 
   return <>
-    <PageHeading eyebrow="BUSINESS AT A GLANCE" title="Good morning." subtitle="Here’s how things are moving across your business." action={<PrimaryButton onClick={onNewInvoice}>Create invoice</PrimaryButton>}>
+    <PageHeading eyebrow="BUSINESS AT A GLANCE" title={greeting} subtitle="Here’s how things are moving across your business." action={<PrimaryButton onClick={onNewInvoice}>Create invoice</PrimaryButton>}>
       <span className="range-context"><CalendarDays size={14} /> {dateRange === "all" ? "All time" : dateRange === "365" ? "This year" : `Last ${dateRange} days`}</span>
     </PageHeading>
     <section className="metrics-grid">
